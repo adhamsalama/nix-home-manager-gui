@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, State};
 
 use crate::channels::{self, Channels};
-use crate::nix::{self, Generation, PackageInfo};
+use crate::nix::{self, Generation, SearchResults};
 use crate::nix_edit::{self, FileValue, Packages};
 use crate::options::HmOption;
 use crate::runner;
@@ -186,7 +186,7 @@ pub fn stage_remove_package(state: State<AppState>, name: String) -> CmdResult<(
 pub async fn search_packages(
     state: State<'_, AppState>,
     query: String,
-) -> CmdResult<Vec<PackageInfo>> {
+) -> CmdResult<SearchResults> {
     let query = query.trim().to_string();
     if query.len() < 2 {
         return Err("type at least two characters".into());
@@ -196,7 +196,7 @@ pub async fn search_packages(
     }
     match state.settings().mode {
         Mode::Mock => mock::search_packages(&query),
-        Mode::Real => nix::search_packages(&query).await,
+        Mode::Real => nix::search_packages(&state.settings(), &query).await,
     }
     .map_err(err)
 }

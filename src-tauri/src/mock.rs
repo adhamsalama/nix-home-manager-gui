@@ -7,7 +7,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use anyhow::{Result, bail};
 
 use crate::channels::{self, Channel, Channels};
-use crate::nix::{Generation, PackageInfo};
+use crate::nix::{Generation, PackageInfo, SearchResults};
 use crate::nix_edit::{self, FileValue};
 use crate::options::HmOption;
 
@@ -21,10 +21,10 @@ pub fn options() -> Result<Vec<HmOption>> {
     crate::options::parse_options_json(OPTIONS_JSON)
 }
 
-pub fn search_packages(query: &str) -> Result<Vec<PackageInfo>> {
+pub fn search_packages(query: &str) -> Result<SearchResults> {
     let all: Vec<serde_json::Value> = serde_json::from_str(PACKAGES_JSON)?;
     let q = query.to_lowercase();
-    Ok(all
+    let packages = all
         .into_iter()
         .map(|v| PackageInfo {
             attr: v["attr"].as_str().unwrap_or_default().into(),
@@ -33,7 +33,11 @@ pub fn search_packages(query: &str) -> Result<Vec<PackageInfo>> {
             description: v["description"].as_str().unwrap_or_default().into(),
         })
         .filter(|p| p.attr.to_lowercase().contains(&q) || p.description.to_lowercase().contains(&q))
-        .collect())
+        .collect();
+    Ok(SearchResults {
+        source: "mock data".into(),
+        packages,
+    })
 }
 
 /// Pretends to evaluate: the file's own expression if it sets the option,

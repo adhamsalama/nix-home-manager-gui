@@ -212,19 +212,65 @@ pub async fn eval_option(settings: &Settings, loc: &[String]) -> Result<String> 
     Ok(serde_json::to_string_pretty(&value)?)
 }
 
-pub async fn search_packages(query: &str) -> Result<Vec<PackageInfo>> {
-    let mut args = nix_args(&["search", "nixpkgs", query, "--json"]);
-    let out = match capture("nix", &args).await {
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchResults {
+    /// Which nixpkgs was searched, for display.
+    pub source: String,
+    pub packages: Vec<PackageInfo>,
+}
+
+/// Where to search, best first: the nixpkgs the user's config builds
+/// against (their flake's input or their channel), then the registry's
+/// nixpkgs-unstable. Each entry is a label and the arguments before the query.
+fn search_sources(settings: &Settings) -> Vec<(&'static str, Vec<String>)> {
+    let flake = settings.flake_ref.trim();
+    let own = if flake.is_empty() {
+        (
+            "your nixpkgs channel",
+            nix_args(&["search", "--file", "<nixpkgs>", ""]),
+        )
+    } else {
+        let dir = flake.split_once('#').map_or(flake, |(dir, _)| dir);
+        let dir = expand_home(dir).display().to_string();
+        (
+            "your flake's nixpkgs input",
+            nix_args(&["search", "--inputs-from", &dir, "nixpkgs"]),
+        )
+    };
+    vec![own, ("nixpkgs-unstable", nix_args(&["search", "nixpkgs"]))]
+}
+
+pub async fn search_packages(settings: &Settings, query: &str) -> Result<SearchResults> {
+    let mut errors = Vec::new();
+    // An empty result is final: falling back to unstable would offer
+    // packages the user's own nixpkgs doesn't have.
+    for (source, mut args) in search_sources(settings) {
+        args.extend([query.to_string(), "--json".into()]);
+        match search_with_retry(args).await {
+            Ok(out) => {
+                return Ok(SearchResults {
+                    source: source.to_string(),
+                    packages: parse_search(&out)?,
+                });
+            }
+            Err(e) => errors.push(format!("Searching {source}: {e:#}")),
+        }
+    }
+    bail!("{}", errors.join("\n\n"))
+}
+
+async fn search_with_retry(mut args: Vec<String>) -> Result<String> {
+    match capture("nix", &args).await {
         // The eval cache remembers that an earlier evaluation failed, but not
         // why. Retrying without it either succeeds (the failure was transient)
         // or reports the real error.
         Err(e) if format!("{e:#}").contains("cached failure") => {
             args.push("--no-eval-cache".into());
-            capture("nix", &args).await?
+            capture("nix", &args).await
         }
-        result => result?,
-    };
-    parse_search(&out)
+        result => result,
+    }
 }
 
 fn parse_search(json: &str) -> Result<Vec<PackageInfo>> {
@@ -232,8 +278,15 @@ fn parse_search(json: &str) -> Result<Vec<PackageInfo>> {
     let mut out: Vec<PackageInfo> = map
         .into_iter()
         .map(|(key, v)| PackageInfo {
-            // Keys look like `legacyPackages.aarch64-darwin.ripgrep`.
-            attr: key.splitn(3, '.').nth(2).unwrap_or(&key).to_string(),
+            // Flake results look like `legacyPackages.x86_64-linux.ripgrep`;
+            // results from a file are plain attribute paths.
+            attr: match key.split_once('.') {
+                Some(("legacyPackages" | "packages", rest)) => {
+                    rest.split_once('.').map_or(rest, |(_, attr)| attr)
+                }
+                _ => &key,
+            }
+            .to_string(),
             pname: v["pname"].as_str().unwrap_or_default().to_string(),
             version: v["version"].as_str().unwrap_or_default().to_string(),
             description: v["description"].as_str().unwrap_or_default().to_string(),
@@ -323,6 +376,39 @@ mod tests {
         let res = parse_search(json).unwrap();
         assert_eq!(res[0].attr, "python3Packages.black");
         assert_eq!(res[1].pname, "ripgrep");
+
+        let from_file =
+            r#"{"python3Packages.black":{"description":"","pname":"black","version":"24"}}"#;
+        assert_eq!(
+            parse_search(from_file).unwrap()[0].attr,
+            "python3Packages.black"
+        );
+    }
+
+    #[test]
+    fn searches_the_users_own_nixpkgs_first() {
+        let mut s = Settings {
+            mode: crate::settings::Mode::Real,
+            config_file: "/cfg/home.nix".into(),
+            flake_ref: String::new(),
+            options_json: String::new(),
+            home_manager_flake: String::new(),
+        };
+        let classic = search_sources(&s);
+        assert!(
+            classic[0]
+                .1
+                .ends_with(&["--file".into(), "<nixpkgs>".into(), String::new()])
+        );
+        assert_eq!(classic[1].0, "nixpkgs-unstable");
+
+        s.flake_ref = "/cfg#me".into();
+        let flake = search_sources(&s);
+        assert!(
+            flake[0]
+                .1
+                .ends_with(&["--inputs-from".into(), "/cfg".into(), "nixpkgs".into()])
+        );
     }
 
     #[test]

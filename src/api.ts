@@ -56,6 +56,11 @@ export interface PackageInfo {
   description: string;
 }
 
+export interface SearchResults {
+  source: string;
+  packages: PackageInfo[];
+}
+
 export interface DiffLine {
   kind: "hunk" | "context" | "add" | "del";
   text: string;
@@ -119,7 +124,7 @@ export const api = {
   getPackages: () => invoke<Packages>("get_packages"),
   stageAddPackage: (name: string) => invoke<void>("stage_add_package", { name }),
   stageRemovePackage: (name: string) => invoke<void>("stage_remove_package", { name }),
-  searchPackages: (query: string) => invoke<PackageInfo[]>("search_packages", { query }),
+  searchPackages: (query: string) => invoke<SearchResults>("search_packages", { query }),
   getChanges: () => invoke<Changes>("get_changes"),
   saveChanges: () => invoke<void>("save_changes"),
   discardChanges: () => invoke<void>("discard_changes"),

@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import { api, errorText, type PackageInfo, type Packages } from "../api";
+import { api, errorText, type Packages, type SearchResults } from "../api";
 
 export function PackagesPage({ revision, onChanged }: { revision: number; onChanged: () => void }) {
   const [packages, setPackages] = useState<Packages | null>(null);
   const [listError, setListError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<PackageInfo[] | null>(null);
+  const [results, setResults] = useState<SearchResults | null>(null);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -80,14 +80,26 @@ export function PackagesPage({ revision, onChanged }: { revision: number; onChan
           {searching && <p className="muted">Searching nixpkgs. The first search can take a while.</p>}
           {error && <p className="error">{error}</p>}
           {results && (
+            <p className="muted small">
+              Searched {results.source}: {results.packages.length.toLocaleString()} result
+              {results.packages.length === 1 ? "" : "s"}
+              {results.packages.length > 200 && ", showing the first 200"}.
+            </p>
+          )}
+          {results?.packages.length === 0 && (
+            <div className="notice">
+              <p>No packages found.</p>
+              <p className="muted small">
+                If you expected results, nixpkgs may have failed to evaluate: <code>nix search</code> hides those
+                errors. To see the real error, run <code>nix eval nixpkgs#hello.name --no-eval-cache</code> in a
+                terminal.
+              </p>
+            </div>
+          )}
+          {results && results.packages.length > 0 && (
             <table className="results">
               <tbody>
-                {results.length === 0 && (
-                  <tr>
-                    <td className="muted">No packages found.</td>
-                  </tr>
-                )}
-                {results.slice(0, 200).map((p) => (
+                {results.packages.slice(0, 200).map((p) => (
                   <tr key={p.attr}>
                     <td>
                       <div className="option-name">{p.attr}</div>
