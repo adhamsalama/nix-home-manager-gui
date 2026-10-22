@@ -111,7 +111,10 @@ pub async fn load_options(state: State<'_, AppState>, refresh: bool) -> CmdResul
     let settings = state.settings();
     let key = match settings.mode {
         Mode::Mock => "mock".to_string(),
-        Mode::Real => format!("{}|{}", settings.options_json, settings.home_manager_flake),
+        Mode::Real => format!(
+            "{}|{}|{}",
+            settings.options_json, settings.flake_ref, settings.home_manager_flake
+        ),
     };
     if !refresh
         && let Some((cached_key, options)) = state.options.lock().unwrap().as_ref()

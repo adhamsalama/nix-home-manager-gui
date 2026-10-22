@@ -94,22 +94,73 @@ pub async fn load_options(settings: &Settings) -> Result<Vec<HmOption>> {
     let path = if !settings.options_json.trim().is_empty() {
         expand_home(settings.options_json.trim())
     } else {
-        let installable = format!("{}#docs-json", settings.home_manager_flake.trim());
-        let out = capture(
-            "nix",
-            &nix_args(&["build", "--no-link", "--print-out-paths", &installable]),
-        )
-        .await?;
-        let store_path = out
-            .lines()
-            .next()
-            .ok_or_else(|| anyhow!("nix build printed no output path"))?;
-        PathBuf::from(store_path).join("share/doc/home-manager/options.json")
+        PathBuf::from(build_docs(settings).await?).join("share/doc/home-manager/options.json")
     };
     let json = tokio::fs::read_to_string(&path)
         .await
         .with_context(|| format!("couldn't read {}", path.display()))?;
     crate::options::parse_options_json(&json)
+}
+
+/// Builds home-manager's docs and returns the output path. Prefers the
+/// home-manager the user actually has (their channel, or the input pinned in
+/// their flake) so options match their version, and only then falls back to
+/// the configured home-manager flake.
+async fn build_docs(settings: &Settings) -> Result<String> {
+    let mut errors = Vec::new();
+    let flake = settings.flake_ref.trim();
+
+    let first = if flake.is_empty() {
+        let args = ["--no-out-link", "<home-manager>", "-A", "docs.json"].map(String::from);
+        (
+            "your home-manager channel",
+            capture("nix-build", &args).await,
+        )
+    } else {
+        let dir = flake.split_once('#').map_or(flake, |(dir, _)| dir);
+        let dir = expand_home(dir).display().to_string();
+        let args = nix_args(&[
+            "build",
+            "--no-link",
+            "--print-out-paths",
+            "--inputs-from",
+            &dir,
+            "home-manager#docs-json",
+        ]);
+        (
+            "the home-manager input of your flake",
+            capture("nix", &args).await,
+        )
+    };
+    match first {
+        (_, Ok(out)) => return last_line(&out),
+        (source, Err(e)) => errors.push(format!("From {source}: {e:#}")),
+    }
+
+    let installable = format!("{}#docs-json", settings.home_manager_flake.trim());
+    let args = nix_args(&["build", "--no-link", "--print-out-paths", &installable]);
+    match capture("nix", &args).await {
+        Ok(out) => return last_line(&out),
+        Err(e) => errors.push(format!("From {installable}: {e:#}")),
+    }
+
+    let mut message = errors.join("\n\n");
+    if message.contains("unsupported tarball input attribute") {
+        message.push_str(
+            "\n\nThis usually means your Nix is older than the one that wrote home-manager's \
+             flake.lock. Check `nix --version` and upgrade Nix, or set an options.json path in Settings.",
+        );
+    }
+    bail!("couldn't build home-manager's option docs:\n\n{message}")
+}
+
+fn last_line(out: &str) -> Result<String> {
+    out.lines()
+        .rev()
+        .map(str::trim)
+        .find(|l| !l.is_empty())
+        .map(str::to_string)
+        .ok_or_else(|| anyhow!("the build printed no output path"))
 }
 
 /// Renders an option path as a Nix attribute selection, quoting every part.
@@ -292,6 +343,13 @@ mod tests {
             home_manager_args(&s, "switch"),
             vec!["switch", "--flake", "/cfg#me"]
         );
+    }
+
+    #[test]
+    fn takes_the_last_output_path() {
+        let out = "these 2 paths will be fetched\n/nix/store/abc-docs-json\n\n";
+        assert_eq!(last_line(out).unwrap(), "/nix/store/abc-docs-json");
+        assert!(last_line("\n").is_err());
     }
 
     #[test]

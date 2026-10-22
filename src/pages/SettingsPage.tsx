@@ -72,18 +72,21 @@ export function SettingsPage({ status, onChanged }: { status: Status | null; onC
 
       <fieldset disabled={settings.mode === "mock"}>
         <legend>Option documentation</legend>
+        <p className="muted small">
+          Options are read from the home-manager you have installed: your <code>home-manager</code> channel in a
+          classic setup, or the <code>home-manager</code> input of your flake. The flake below is only a fallback.
+        </p>
         <label>
-          <span>home-manager flake</span>
+          <span>Fallback home-manager flake</span>
           <input type="text" value={settings.homeManagerFlake} onChange={(e) => set({ homeManagerFlake: e.target.value })} />
           <small className="muted">
-            Options are read from this flake's <code>docs-json</code> output. Pin it to your home-manager release, e.g.{" "}
-            <code>github:nix-community/home-manager/release-25.05</code>.
+            Pin it to your release, e.g. <code>github:nix-community/home-manager/release-25.05</code>.
           </small>
         </label>
         <label>
           <span>options.json path (optional)</span>
           <input type="text" value={settings.optionsJson} onChange={(e) => set({ optionsJson: e.target.value })} />
-          <small className="muted">Overrides the flake above.</small>
+          <small className="muted">Overrides everything above.</small>
         </label>
       </fieldset>
 
