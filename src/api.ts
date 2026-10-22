@@ -56,6 +56,16 @@ export interface PackageInfo {
   description: string;
 }
 
+export interface PackageDetails {
+  attr: string;
+  name: string | null;
+  version: string | null;
+  description: string | null;
+  homepage: string | null;
+  licenses: string[];
+  source: string;
+}
+
 export interface SearchResults {
   source: string;
   packages: PackageInfo[];
@@ -125,6 +135,7 @@ export const api = {
   stageAddPackage: (name: string) => invoke<void>("stage_add_package", { name }),
   stageRemovePackage: (name: string) => invoke<void>("stage_remove_package", { name }),
   searchPackages: (query: string) => invoke<SearchResults>("search_packages", { query }),
+  packageDetails: (attr: string) => invoke<PackageDetails>("package_details", { attr }),
   getChanges: () => invoke<Changes>("get_changes"),
   saveChanges: () => invoke<void>("save_changes"),
   discardChanges: () => invoke<void>("discard_changes"),

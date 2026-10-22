@@ -508,7 +508,7 @@ fn package_name(item: &ast::Expr) -> String {
         .unwrap_or(text)
 }
 
-fn is_package_attr(name: &str) -> bool {
+pub fn is_package_attr(name: &str) -> bool {
     !name.is_empty() && name.split('.').all(is_simple_ident)
 }
 

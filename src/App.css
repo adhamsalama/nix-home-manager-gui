@@ -240,8 +240,7 @@ main {
 
 /* Lists */
 
-.option-list,
-.package-list {
+.option-list {
   list-style: none;
   margin: 0;
   padding: 4px;
@@ -270,22 +269,19 @@ main {
   background: var(--accent-soft);
 }
 
-.package-list li {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 3px 8px;
-  border-radius: 5px;
-}
 
-.package-list li:hover {
-  background: var(--surface-2);
-}
 
 .option-name {
   font-family: var(--mono);
   font-size: 12.5px;
   overflow-wrap: anywhere;
+}
+
+.inline-list {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  margin-top: 10px;
 }
 
 .dot {

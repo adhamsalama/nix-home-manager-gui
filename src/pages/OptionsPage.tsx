@@ -31,7 +31,19 @@ function search(options: HmOption[], query: string, setPaths: Set<string> | null
   return scored.sort((a, b) => b[0] - a[0]).map(([, o]) => o);
 }
 
-export function OptionsPage({ revision, onChanged }: { revision: number; onChanged: () => void }) {
+export interface OptionFocus {
+  name: string;
+  /** Changes on every request, so the same option can be focused twice. */
+  nonce: number;
+}
+
+interface Props {
+  revision: number;
+  onChanged: () => void;
+  focus: OptionFocus | null;
+}
+
+export function OptionsPage({ revision, onChanged, focus }: Props) {
   const [options, setOptions] = useState<HmOption[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -48,6 +60,14 @@ export function OptionsPage({ revision, onChanged }: { revision: number; onChang
       .catch((e) => setLoadError(errorText(e)));
   };
   useEffect(() => load(false), []);
+
+  useEffect(() => {
+    const option = focus && options?.find((o) => o.name === focus.name);
+    if (!option) return;
+    setQuery(option.name);
+    setOnlySet(false);
+    setSelected(option);
+  }, [focus?.nonce, options]);
 
   useEffect(() => {
     api

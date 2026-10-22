@@ -91,6 +91,7 @@ pub fn run() {
             commands::stage_add_package,
             commands::stage_remove_package,
             commands::search_packages,
+            commands::package_details,
             commands::get_changes,
             commands::save_changes,
             commands::discard_changes,

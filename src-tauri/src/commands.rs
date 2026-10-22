@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, State};
 
 use crate::channels::{self, Channels};
-use crate::nix::{self, Generation, SearchResults};
+use crate::nix::{self, Generation, PackageDetails, SearchResults};
 use crate::nix_edit::{self, FileValue, Packages};
 use crate::options::HmOption;
 use crate::runner;
@@ -197,6 +197,19 @@ pub async fn search_packages(
     match state.settings().mode {
         Mode::Mock => mock::search_packages(&query),
         Mode::Real => nix::search_packages(&state.settings(), &query).await,
+    }
+    .map_err(err)
+}
+
+/// Version, description and license of a package in the user's nixpkgs.
+#[tauri::command]
+pub async fn package_details(
+    state: State<'_, AppState>,
+    attr: String,
+) -> CmdResult<PackageDetails> {
+    match state.settings().mode {
+        Mode::Mock => mock::package_details(&attr),
+        Mode::Real => nix::package_details(&state.settings(), &attr).await,
     }
     .map_err(err)
 }

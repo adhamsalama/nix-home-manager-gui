@@ -220,32 +220,66 @@ pub struct SearchResults {
     pub packages: Vec<PackageInfo>,
 }
 
-/// Where to search, best first: the nixpkgs the user's config builds
-/// against (their flake's input or their channel), then the registry's
-/// nixpkgs-unstable. Each entry is a label and the arguments before the query.
-fn search_sources(settings: &Settings) -> Vec<(&'static str, Vec<String>)> {
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PackageDetails {
+    pub attr: String,
+    pub name: Option<String>,
+    pub version: Option<String>,
+    pub description: Option<String>,
+    pub homepage: Option<String>,
+    pub licenses: Vec<String>,
+    /// Which nixpkgs it was read from, for display.
+    pub source: String,
+}
+
+/// A nixpkgs to look packages up in.
+#[derive(Debug, PartialEq)]
+enum Nixpkgs {
+    /// `<nixpkgs>` from the user's channels.
+    Channel,
+    /// The `nixpkgs` input pinned in the user's flake.
+    FlakeInput(String),
+    /// The registry's `nixpkgs`, i.e. nixpkgs-unstable.
+    Registry,
+}
+
+/// Best first: the nixpkgs the user's config builds against (their flake's
+/// input or their channel), then the registry's nixpkgs-unstable.
+fn nixpkgs_sources(settings: &Settings) -> Vec<(&'static str, Nixpkgs)> {
     let flake = settings.flake_ref.trim();
     let own = if flake.is_empty() {
-        (
-            "your nixpkgs channel",
-            nix_args(&["search", "--file", "<nixpkgs>", ""]),
-        )
+        ("your nixpkgs channel", Nixpkgs::Channel)
     } else {
         let dir = flake.split_once('#').map_or(flake, |(dir, _)| dir);
-        let dir = expand_home(dir).display().to_string();
         (
             "your flake's nixpkgs input",
-            nix_args(&["search", "--inputs-from", &dir, "nixpkgs"]),
+            Nixpkgs::FlakeInput(expand_home(dir).display().to_string()),
         )
     };
-    vec![own, ("nixpkgs-unstable", nix_args(&["search", "nixpkgs"]))]
+    vec![own, ("nixpkgs-unstable", Nixpkgs::Registry)]
+}
+
+/// Arguments for a nix subcommand on `attr` (empty for all of nixpkgs).
+fn nixpkgs_args(subcommand: &str, source: &Nixpkgs, attr: &str) -> Vec<String> {
+    let flake_attr = if attr.is_empty() {
+        "nixpkgs".to_string()
+    } else {
+        format!("nixpkgs#{attr}")
+    };
+    match source {
+        Nixpkgs::Channel => nix_args(&[subcommand, "--file", "<nixpkgs>", attr]),
+        Nixpkgs::FlakeInput(dir) => nix_args(&[subcommand, "--inputs-from", dir, &flake_attr]),
+        Nixpkgs::Registry => nix_args(&[subcommand, &flake_attr]),
+    }
 }
 
 pub async fn search_packages(settings: &Settings, query: &str) -> Result<SearchResults> {
     let mut errors = Vec::new();
     // An empty result is final: falling back to unstable would offer
     // packages the user's own nixpkgs doesn't have.
-    for (source, mut args) in search_sources(settings) {
+    for (source, nixpkgs) in nixpkgs_sources(settings) {
+        let mut args = nixpkgs_args("search", &nixpkgs, "");
         args.extend([query.to_string(), "--json".into()]);
         match search_with_retry(args).await {
             Ok(out) => {
@@ -294,6 +328,63 @@ fn parse_search(json: &str) -> Result<Vec<PackageInfo>> {
         .collect();
     out.sort_by(|a, b| a.attr.cmp(&b.attr));
     Ok(out)
+}
+
+/// Summarizes a package's metadata as JSON-friendly values. `meta.homepage`
+/// and `meta.license` can each be a single value or a list.
+const PACKAGE_DETAILS_EXPR: &str = r#"p:
+  let
+    first = x: if builtins.isList x then (if x == [ ] then null else builtins.head x) else x;
+    toList = x: if builtins.isList x then x else if x == null then [ ] else [ x ];
+    license = l: if builtins.isAttrs l then (l.spdxId or l.fullName or "unknown") else toString l;
+  in {
+    name = p.pname or p.name or null;
+    version = p.version or null;
+    description = p.meta.description or null;
+    homepage = first (p.meta.homepage or null);
+    licenses = map license (toList (p.meta.license or null));
+  }"#;
+
+pub async fn package_details(settings: &Settings, attr: &str) -> Result<PackageDetails> {
+    if !crate::nix_edit::is_package_attr(attr) {
+        bail!("`{attr}` is an expression rather than a package name, so it can't be looked up");
+    }
+    let mut errors = Vec::new();
+    for (source, nixpkgs) in nixpkgs_sources(settings) {
+        let mut args = nixpkgs_args("eval", &nixpkgs, attr);
+        args.extend([
+            "--json".into(),
+            "--apply".into(),
+            PACKAGE_DETAILS_EXPR.into(),
+        ]);
+        match capture("nix", &args).await {
+            Ok(out) => return parse_details(&out, attr, source),
+            Err(e) => errors.push(format!("Looking in {source}: {e:#}")),
+        }
+    }
+    bail!("{}", errors.join("\n\n"))
+}
+
+fn parse_details(json: &str, attr: &str, source: &str) -> Result<PackageDetails> {
+    let v: serde_json::Value =
+        serde_json::from_str(json.trim()).context("nix returned invalid JSON")?;
+    let text = |key: &str| v[key].as_str().map(str::to_string);
+    Ok(PackageDetails {
+        attr: attr.to_string(),
+        name: text("name"),
+        version: text("version"),
+        description: text("description"),
+        homepage: text("homepage"),
+        licenses: v["licenses"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|l| l.as_str().map(str::to_string))
+                    .collect()
+            })
+            .unwrap_or_default(),
+        source: source.to_string(),
+    })
 }
 
 /// Arguments for `home-manager build|switch`.
@@ -386,7 +477,7 @@ mod tests {
     }
 
     #[test]
-    fn searches_the_users_own_nixpkgs_first() {
+    fn uses_the_users_own_nixpkgs_first() {
         let mut s = Settings {
             mode: crate::settings::Mode::Real,
             config_file: "/cfg/home.nix".into(),
@@ -394,21 +485,42 @@ mod tests {
             options_json: String::new(),
             home_manager_flake: String::new(),
         };
-        let classic = search_sources(&s);
-        assert!(
-            classic[0]
-                .1
-                .ends_with(&["--file".into(), "<nixpkgs>".into(), String::new()])
+        let classic = nixpkgs_sources(&s);
+        assert_eq!(classic[0].1, Nixpkgs::Channel);
+        assert_eq!(classic[1].1, Nixpkgs::Registry);
+        let args =
+            |sub: &str, src: &Nixpkgs, attr: &str| nixpkgs_args(sub, src, attr)[2..].to_vec();
+        assert_eq!(
+            args("search", &Nixpkgs::Channel, ""),
+            ["search", "--file", "<nixpkgs>", ""]
         );
-        assert_eq!(classic[1].0, "nixpkgs-unstable");
+        assert_eq!(
+            args("eval", &Nixpkgs::Channel, "jq"),
+            ["eval", "--file", "<nixpkgs>", "jq"]
+        );
+        assert_eq!(
+            args("eval", &Nixpkgs::Registry, "jq"),
+            ["eval", "nixpkgs#jq"]
+        );
 
         s.flake_ref = "/cfg#me".into();
-        let flake = search_sources(&s);
-        assert!(
-            flake[0]
-                .1
-                .ends_with(&["--inputs-from".into(), "/cfg".into(), "nixpkgs".into()])
+        let flake = nixpkgs_sources(&s);
+        assert_eq!(flake[0].1, Nixpkgs::FlakeInput("/cfg".into()));
+        assert_eq!(
+            args("search", &flake[0].1, ""),
+            ["search", "--inputs-from", "/cfg", "nixpkgs"]
         );
+    }
+
+    #[test]
+    fn parses_package_details() {
+        let json = r#"{"name":"jq","version":"1.7.1","description":"JSON processor","homepage":"https://jqlang.github.io/jq/","licenses":["MIT"]}"#;
+        let d = parse_details(json, "jq", "your nixpkgs channel").unwrap();
+        assert_eq!(d.version.as_deref(), Some("1.7.1"));
+        assert_eq!(d.licenses, vec!["MIT"]);
+        let sparse =
+            r#"{"name":null,"version":null,"description":null,"homepage":null,"licenses":[]}"#;
+        assert_eq!(parse_details(sparse, "x", "s").unwrap().version, None);
     }
 
     #[test]

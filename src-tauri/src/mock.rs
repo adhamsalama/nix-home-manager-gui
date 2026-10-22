@@ -7,7 +7,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use anyhow::{Result, bail};
 
 use crate::channels::{self, Channel, Channels};
-use crate::nix::{Generation, PackageInfo, SearchResults};
+use crate::nix::{Generation, PackageDetails, PackageInfo, SearchResults};
 use crate::nix_edit::{self, FileValue};
 use crate::options::HmOption;
 
@@ -37,6 +37,22 @@ pub fn search_packages(query: &str) -> Result<SearchResults> {
     Ok(SearchResults {
         source: "mock data".into(),
         packages,
+    })
+}
+
+pub fn package_details(attr: &str) -> Result<PackageDetails> {
+    let found = search_packages(attr)?
+        .packages
+        .into_iter()
+        .find(|p| p.attr == attr);
+    Ok(PackageDetails {
+        attr: attr.to_string(),
+        name: found.as_ref().map(|p| p.pname.clone()),
+        version: found.as_ref().map(|p| p.version.clone()),
+        description: found.map(|p| p.description),
+        homepage: None,
+        licenses: vec![],
+        source: "mock data".into(),
     })
 }
 

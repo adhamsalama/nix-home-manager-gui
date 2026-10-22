@@ -3,7 +3,7 @@ import { api, type Status } from "./api";
 import { ApplyPage } from "./pages/ApplyPage";
 import { ChannelsPage } from "./pages/ChannelsPage";
 import { GenerationsPage } from "./pages/GenerationsPage";
-import { OptionsPage } from "./pages/OptionsPage";
+import { OptionsPage, type OptionFocus } from "./pages/OptionsPage";
 import { PackagesPage } from "./pages/PackagesPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import "./App.css";
@@ -26,6 +26,12 @@ export default function App() {
   const [revision, setRevision] = useState(0);
   // Bumped when settings change, which remounts pages with fresh data.
   const [settingsVersion, setSettingsVersion] = useState(0);
+  const [optionFocus, setOptionFocus] = useState<OptionFocus | null>(null);
+
+  const openOption = (name: string) => {
+    setOptionFocus({ name, nonce: Date.now() });
+    setPage("options");
+  };
 
   const refresh = useCallback(() => {
     setRevision((r) => r + 1);
@@ -84,10 +90,10 @@ export default function App() {
         )}
         {/* Pages stay mounted so searches and scroll positions survive tab switches. */}
         <div className="page-host" hidden={page !== "options"}>
-          <OptionsPage {...props} />
+          <OptionsPage {...props} focus={optionFocus} />
         </div>
         <div className="page-host" hidden={page !== "packages"}>
-          <PackagesPage {...props} />
+          <PackagesPage {...props} onOpenOption={openOption} />
         </div>
         <div className="page-host" hidden={page !== "apply"}>
           <ApplyPage {...props} />
