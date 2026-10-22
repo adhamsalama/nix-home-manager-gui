@@ -1,0 +1,1494 @@
+{
+ "fonts.fontconfig.enable": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/fonts/fontconfig.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/fonts/fontconfig.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "false"
+  },
+  "description": "Whether to enable fontconfig configuration.",
+  "loc": [
+   "fonts",
+   "fontconfig",
+   "enable"
+  ],
+  "readOnly": false,
+  "type": "boolean"
+ },
+ "home.file.<name>.executable": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/home/file.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/home/file.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "null"
+  },
+  "description": "Set the execute bit. If `null`, defaults to the mode of the `source` file or to `false` for files created through the `text` option.",
+  "loc": [
+   "home",
+   "file",
+   "<name>",
+   "executable"
+  ],
+  "readOnly": false,
+  "type": "null or boolean"
+ },
+ "home.file.<name>.source": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/home/file.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/home/file.nix"
+   }
+  ],
+  "description": "Path of the source file or directory.",
+  "loc": [
+   "home",
+   "file",
+   "<name>",
+   "source"
+  ],
+  "readOnly": false,
+  "type": "absolute path"
+ },
+ "home.file.<name>.text": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/home/file.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/home/file.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "null"
+  },
+  "description": "Text of the file. If this option is null then `home.file.<name>.source` must be set.",
+  "loc": [
+   "home",
+   "file",
+   "<name>",
+   "text"
+  ],
+  "readOnly": false,
+  "type": "null or strings concatenated with \"\\n\""
+ },
+ "home.homeDirectory": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/home/homeDirectory.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/home/homeDirectory.nix"
+   }
+  ],
+  "description": "The user's home directory. Must be an absolute path.",
+  "example": {
+   "_type": "literalExpression",
+   "text": "\"/home/jane.doe\""
+  },
+  "loc": [
+   "home",
+   "homeDirectory"
+  ],
+  "readOnly": false,
+  "type": "absolute path"
+ },
+ "home.packages": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/home/packages.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/home/packages.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "[ ]"
+  },
+  "description": "The set of packages to appear in the user environment.",
+  "loc": [
+   "home",
+   "packages"
+  ],
+  "readOnly": false,
+  "type": "list of package"
+ },
+ "home.sessionPath": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/home/sessionPath.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/home/sessionPath.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "[ ]"
+  },
+  "description": "Extra directories to prepend to `PATH`.",
+  "example": {
+   "_type": "literalExpression",
+   "text": "[\n  \"$HOME/.local/bin\"\n  \"\\${xdg.configHome}/emacs/bin\"\n]"
+  },
+  "loc": [
+   "home",
+   "sessionPath"
+  ],
+  "readOnly": false,
+  "type": "list of string"
+ },
+ "home.sessionVariables": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/home/sessionVariables.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/home/sessionVariables.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "{ }"
+  },
+  "description": "Environment variables to always set at login.\n\nThe values may refer to other environment variables using POSIX.2 style variable references.",
+  "example": {
+   "_type": "literalExpression",
+   "text": "{\n  EDITOR = \"emacs\";\n  GS_OPTIONS = \"-sPAPERSIZE=a4\";\n}"
+  },
+  "loc": [
+   "home",
+   "sessionVariables"
+  ],
+  "readOnly": false,
+  "type": "lazy attribute set of (string or signed integer or floating point number or path)"
+ },
+ "home.shellAliases": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/home/shellAliases.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/home/shellAliases.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "{ }"
+  },
+  "description": "An attribute set that maps aliases (the top level attribute names in this option) to command strings or directly to build outputs.",
+  "example": {
+   "_type": "literalExpression",
+   "text": "{\n  g = \"git\";\n  \"...\" = \"cd ../..\";\n}"
+  },
+  "loc": [
+   "home",
+   "shellAliases"
+  ],
+  "readOnly": false,
+  "type": "attribute set of string"
+ },
+ "home.stateVersion": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/home/stateVersion.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/home/stateVersion.nix"
+   }
+  ],
+  "description": "It is occasionally necessary for Home Manager to change configuration defaults in a way that is incompatible with stateful data. This could, for example, include switching the default data format or location of a file.\n\nThe *state version* indicates which default settings are in effect and will therefore help avoid breaking program configurations. Switching to a higher state version typically requires performing some manual steps, such as data conversion or moving files.",
+  "loc": [
+   "home",
+   "stateVersion"
+  ],
+  "readOnly": false,
+  "type": "one of \"18.09\", \"19.03\", \"19.09\", \"20.03\", \"20.09\", \"21.05\", \"21.11\", \"22.05\", \"22.11\", \"23.05\", \"23.11\", \"24.05\", \"24.11\", \"25.05\""
+ },
+ "home.username": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/home/username.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/home/username.nix"
+   }
+  ],
+  "description": "The user's username.",
+  "example": {
+   "_type": "literalExpression",
+   "text": "\"jane.doe\""
+  },
+  "loc": [
+   "home",
+   "username"
+  ],
+  "readOnly": false,
+  "type": "string"
+ },
+ "manual.manpages.enable": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/manual/manpages.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/manual/manpages.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "true"
+  },
+  "description": "Whether to install the configuration manual page.",
+  "example": {
+   "_type": "literalExpression",
+   "text": "false"
+  },
+  "loc": [
+   "manual",
+   "manpages",
+   "enable"
+  ],
+  "readOnly": false,
+  "type": "boolean"
+ },
+ "news.display": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/news/display.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/news/display.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "\"notify\""
+  },
+  "description": "How unread and relevant news should be presented when running {command}`home-manager build` and {command}`home-manager switch`.",
+  "loc": [
+   "news",
+   "display"
+  ],
+  "readOnly": false,
+  "type": "one of \"silent\", \"notify\", \"show\""
+ },
+ "nixpkgs.config.allowUnfree": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/nixpkgs/config.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/nixpkgs/config.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "false"
+  },
+  "description": "Whether to allow unfree packages.",
+  "loc": [
+   "nixpkgs",
+   "config",
+   "allowUnfree"
+  ],
+  "readOnly": false,
+  "type": "boolean"
+ },
+ "programs.alacritty.enable": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/programs/alacritty.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/programs/alacritty.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "false"
+  },
+  "description": "Whether to enable Alacritty.",
+  "example": {
+   "_type": "literalExpression",
+   "text": "true"
+  },
+  "loc": [
+   "programs",
+   "alacritty",
+   "enable"
+  ],
+  "readOnly": false,
+  "type": "boolean"
+ },
+ "programs.alacritty.settings": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/programs/alacritty.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/programs/alacritty.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "{ }"
+  },
+  "description": "Configuration written to {file}`$XDG_CONFIG_HOME/alacritty/alacritty.toml`.",
+  "loc": [
+   "programs",
+   "alacritty",
+   "settings"
+  ],
+  "readOnly": false,
+  "type": "TOML value"
+ },
+ "programs.bash.enable": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/programs/bash.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/programs/bash.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "false"
+  },
+  "description": "Whether to enable GNU Bourne-Again SHell.",
+  "example": {
+   "_type": "literalExpression",
+   "text": "true"
+  },
+  "loc": [
+   "programs",
+   "bash",
+   "enable"
+  ],
+  "readOnly": false,
+  "type": "boolean"
+ },
+ "programs.bat.config": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/programs/bat.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/programs/bat.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "{ }"
+  },
+  "description": "Bat configuration.",
+  "example": {
+   "_type": "literalExpression",
+   "text": "{\n  theme = \"TwoDark\";\n  pager = \"less -FR\";\n}"
+  },
+  "loc": [
+   "programs",
+   "bat",
+   "config"
+  ],
+  "readOnly": false,
+  "type": "attribute set of (string or boolean or list of string)"
+ },
+ "programs.bat.enable": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/programs/bat.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/programs/bat.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "false"
+  },
+  "description": "Whether to enable bat, a cat clone with wings.",
+  "example": {
+   "_type": "literalExpression",
+   "text": "true"
+  },
+  "loc": [
+   "programs",
+   "bat",
+   "enable"
+  ],
+  "readOnly": false,
+  "type": "boolean"
+ },
+ "programs.direnv.enable": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/programs/direnv.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/programs/direnv.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "false"
+  },
+  "description": "Whether to enable direnv, the environment switcher.",
+  "example": {
+   "_type": "literalExpression",
+   "text": "true"
+  },
+  "loc": [
+   "programs",
+   "direnv",
+   "enable"
+  ],
+  "readOnly": false,
+  "type": "boolean"
+ },
+ "programs.direnv.nix-direnv.enable": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/programs/direnv.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/programs/direnv.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "false"
+  },
+  "description": "Whether to enable nix-direnv, a fast, persistent use_nix implementation for direnv.",
+  "loc": [
+   "programs",
+   "direnv",
+   "nix-direnv",
+   "enable"
+  ],
+  "readOnly": false,
+  "type": "boolean"
+ },
+ "programs.eza.enable": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/programs/eza.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/programs/eza.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "false"
+  },
+  "description": "Whether to enable eza, a modern replacement for {command}`ls`.",
+  "example": {
+   "_type": "literalExpression",
+   "text": "true"
+  },
+  "loc": [
+   "programs",
+   "eza",
+   "enable"
+  ],
+  "readOnly": false,
+  "type": "boolean"
+ },
+ "programs.eza.icons": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/programs/eza.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/programs/eza.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "null"
+  },
+  "description": "Display icons next to file names.",
+  "loc": [
+   "programs",
+   "eza",
+   "icons"
+  ],
+  "readOnly": false,
+  "type": "one of \"auto\", \"always\", \"never\""
+ },
+ "programs.fish.enable": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/programs/fish.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/programs/fish.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "false"
+  },
+  "description": "Whether to enable fish, the friendly interactive shell.",
+  "example": {
+   "_type": "literalExpression",
+   "text": "true"
+  },
+  "loc": [
+   "programs",
+   "fish",
+   "enable"
+  ],
+  "readOnly": false,
+  "type": "boolean"
+ },
+ "programs.fzf.enable": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/programs/fzf.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/programs/fzf.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "false"
+  },
+  "description": "Whether to enable fzf - a command-line fuzzy finder.",
+  "example": {
+   "_type": "literalExpression",
+   "text": "true"
+  },
+  "loc": [
+   "programs",
+   "fzf",
+   "enable"
+  ],
+  "readOnly": false,
+  "type": "boolean"
+ },
+ "programs.gh.enable": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/programs/gh.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/programs/gh.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "false"
+  },
+  "description": "Whether to enable GitHub CLI tool.",
+  "example": {
+   "_type": "literalExpression",
+   "text": "true"
+  },
+  "loc": [
+   "programs",
+   "gh",
+   "enable"
+  ],
+  "readOnly": false,
+  "type": "boolean"
+ },
+ "programs.gh.settings.git_protocol": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/programs/gh.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/programs/gh.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "\"https\""
+  },
+  "description": "The protocol to use when performing Git operations.",
+  "example": {
+   "_type": "literalExpression",
+   "text": "\"ssh\""
+  },
+  "loc": [
+   "programs",
+   "gh",
+   "settings",
+   "git_protocol"
+  ],
+  "readOnly": false,
+  "type": "string"
+ },
+ "programs.git.aliases": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/programs/git.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/programs/git.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "{ }"
+  },
+  "description": "Git aliases to define.",
+  "example": {
+   "_type": "literalExpression",
+   "text": "{ co = \"checkout\"; }"
+  },
+  "loc": [
+   "programs",
+   "git",
+   "aliases"
+  ],
+  "readOnly": false,
+  "type": "attribute set of string"
+ },
+ "programs.git.delta.enable": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/programs/git.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/programs/git.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "false"
+  },
+  "description": "Whether to enable the delta syntax highlighter.",
+  "example": {
+   "_type": "literalExpression",
+   "text": "true"
+  },
+  "loc": [
+   "programs",
+   "git",
+   "delta",
+   "enable"
+  ],
+  "readOnly": false,
+  "type": "boolean"
+ },
+ "programs.git.enable": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/programs/git.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/programs/git.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "false"
+  },
+  "description": "Whether to enable Git.",
+  "example": {
+   "_type": "literalExpression",
+   "text": "true"
+  },
+  "loc": [
+   "programs",
+   "git",
+   "enable"
+  ],
+  "readOnly": false,
+  "type": "boolean"
+ },
+ "programs.git.extraConfig": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/programs/git.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/programs/git.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "{ }"
+  },
+  "description": "Additional configuration to add. The use of string values is deprecated and will be removed in the future.",
+  "example": {
+   "_type": "literalExpression",
+   "text": "{\n  core = {\n    whitespace = \"trailing-space,space-before-tab\";\n  };\n}"
+  },
+  "loc": [
+   "programs",
+   "git",
+   "extraConfig"
+  ],
+  "readOnly": false,
+  "type": "strings concatenated with \"\\n\" or attribute set of attribute set of (string or boolean or signed integer or list of (string or boolean or signed integer))"
+ },
+ "programs.git.ignores": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/programs/git.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/programs/git.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "[ ]"
+  },
+  "description": "List of paths that should be globally ignored.",
+  "example": {
+   "_type": "literalExpression",
+   "text": "[ \"*~\" \"*.swp\" ]"
+  },
+  "loc": [
+   "programs",
+   "git",
+   "ignores"
+  ],
+  "readOnly": false,
+  "type": "list of string"
+ },
+ "programs.git.lfs.enable": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/programs/git.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/programs/git.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "false"
+  },
+  "description": "Whether to enable Git Large File Storage.",
+  "example": {
+   "_type": "literalExpression",
+   "text": "true"
+  },
+  "loc": [
+   "programs",
+   "git",
+   "lfs",
+   "enable"
+  ],
+  "readOnly": false,
+  "type": "boolean"
+ },
+ "programs.git.userEmail": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/programs/git.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/programs/git.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "null"
+  },
+  "description": "Default user email to use.",
+  "loc": [
+   "programs",
+   "git",
+   "userEmail"
+  ],
+  "readOnly": false,
+  "type": "null or string"
+ },
+ "programs.git.userName": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/programs/git.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/programs/git.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "null"
+  },
+  "description": "Default user name to use.",
+  "loc": [
+   "programs",
+   "git",
+   "userName"
+  ],
+  "readOnly": false,
+  "type": "null or string"
+ },
+ "programs.home-manager.enable": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/programs/home-manager.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/programs/home-manager.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "false"
+  },
+  "description": "Whether to enable Home Manager.",
+  "example": {
+   "_type": "literalExpression",
+   "text": "true"
+  },
+  "loc": [
+   "programs",
+   "home-manager",
+   "enable"
+  ],
+  "readOnly": false,
+  "type": "boolean"
+ },
+ "programs.htop.enable": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/programs/htop.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/programs/htop.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "false"
+  },
+  "description": "Whether to enable htop.",
+  "example": {
+   "_type": "literalExpression",
+   "text": "true"
+  },
+  "loc": [
+   "programs",
+   "htop",
+   "enable"
+  ],
+  "readOnly": false,
+  "type": "boolean"
+ },
+ "programs.jq.enable": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/programs/jq.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/programs/jq.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "false"
+  },
+  "description": "Whether to enable jq, a lightweight and flexible command-line JSON processor.",
+  "example": {
+   "_type": "literalExpression",
+   "text": "true"
+  },
+  "loc": [
+   "programs",
+   "jq",
+   "enable"
+  ],
+  "readOnly": false,
+  "type": "boolean"
+ },
+ "programs.neovim.defaultEditor": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/programs/neovim.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/programs/neovim.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "false"
+  },
+  "description": "Whether to configure {command}`nvim` as the default editor using the {env}`EDITOR` environment variable.",
+  "loc": [
+   "programs",
+   "neovim",
+   "defaultEditor"
+  ],
+  "readOnly": false,
+  "type": "boolean"
+ },
+ "programs.neovim.enable": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/programs/neovim.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/programs/neovim.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "false"
+  },
+  "description": "Whether to enable Neovim.",
+  "example": {
+   "_type": "literalExpression",
+   "text": "true"
+  },
+  "loc": [
+   "programs",
+   "neovim",
+   "enable"
+  ],
+  "readOnly": false,
+  "type": "boolean"
+ },
+ "programs.neovim.extraConfig": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/programs/neovim.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/programs/neovim.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "\"\""
+  },
+  "description": "Custom vimrc lines.",
+  "example": {
+   "_type": "literalExpression",
+   "text": "''\n  set nocompatible\n  set nobackup\n''"
+  },
+  "loc": [
+   "programs",
+   "neovim",
+   "extraConfig"
+  ],
+  "readOnly": false,
+  "type": "strings concatenated with \"\\n\""
+ },
+ "programs.neovim.plugins": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/programs/neovim.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/programs/neovim.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "[ ]"
+  },
+  "description": "List of vim plugins to install optionally associated with configuration to be placed in init.vim.",
+  "example": {
+   "_type": "literalExpression",
+   "text": "with pkgs.vimPlugins; [ yankring vim-nix ]"
+  },
+  "loc": [
+   "programs",
+   "neovim",
+   "plugins"
+  ],
+  "readOnly": false,
+  "type": "list of (package or (submodule))"
+ },
+ "programs.neovim.viAlias": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/programs/neovim.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/programs/neovim.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "false"
+  },
+  "description": "Symlink {command}`vi` to {command}`nvim` binary.",
+  "loc": [
+   "programs",
+   "neovim",
+   "viAlias"
+  ],
+  "readOnly": false,
+  "type": "boolean"
+ },
+ "programs.neovim.vimAlias": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/programs/neovim.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/programs/neovim.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "false"
+  },
+  "description": "Symlink {command}`vim` to {command}`nvim` binary.",
+  "loc": [
+   "programs",
+   "neovim",
+   "vimAlias"
+  ],
+  "readOnly": false,
+  "type": "boolean"
+ },
+ "programs.ssh.addKeysToAgent": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/programs/ssh.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/programs/ssh.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "\"no\""
+  },
+  "description": "When enabled, a private key that is used during authentication will be added to ssh-agent if it is running.",
+  "loc": [
+   "programs",
+   "ssh",
+   "addKeysToAgent"
+  ],
+  "readOnly": false,
+  "type": "string"
+ },
+ "programs.ssh.enable": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/programs/ssh.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/programs/ssh.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "false"
+  },
+  "description": "Whether to enable SSH client configuration.",
+  "example": {
+   "_type": "literalExpression",
+   "text": "true"
+  },
+  "loc": [
+   "programs",
+   "ssh",
+   "enable"
+  ],
+  "readOnly": false,
+  "type": "boolean"
+ },
+ "programs.starship.enable": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/programs/starship.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/programs/starship.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "false"
+  },
+  "description": "Whether to enable starship.",
+  "example": {
+   "_type": "literalExpression",
+   "text": "true"
+  },
+  "loc": [
+   "programs",
+   "starship",
+   "enable"
+  ],
+  "readOnly": false,
+  "type": "boolean"
+ },
+ "programs.starship.enableZshIntegration": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/programs/starship.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/programs/starship.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "true"
+  },
+  "description": "Whether to enable Zsh integration.",
+  "loc": [
+   "programs",
+   "starship",
+   "enableZshIntegration"
+  ],
+  "readOnly": false,
+  "type": "boolean"
+ },
+ "programs.starship.settings": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/programs/starship.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/programs/starship.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "{ }"
+  },
+  "description": "Configuration written to `$XDG_CONFIG_HOME/starship.toml`.",
+  "example": {
+   "_type": "literalExpression",
+   "text": "{\n  add_newline = false;\n  format = lib.concatStrings [ \"$line_break\" \"$package\" \"$line_break\" \"$character\" ];\n}"
+  },
+  "loc": [
+   "programs",
+   "starship",
+   "settings"
+  ],
+  "readOnly": false,
+  "type": "TOML value"
+ },
+ "programs.tmux.enable": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/programs/tmux.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/programs/tmux.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "false"
+  },
+  "description": "Whether to enable tmux.",
+  "example": {
+   "_type": "literalExpression",
+   "text": "true"
+  },
+  "loc": [
+   "programs",
+   "tmux",
+   "enable"
+  ],
+  "readOnly": false,
+  "type": "boolean"
+ },
+ "programs.tmux.historyLimit": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/programs/tmux.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/programs/tmux.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "2000"
+  },
+  "description": "Maximum number of lines held in window history.",
+  "loc": [
+   "programs",
+   "tmux",
+   "historyLimit"
+  ],
+  "readOnly": false,
+  "type": "positive integer, meaning >0"
+ },
+ "programs.tmux.mouse": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/programs/tmux.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/programs/tmux.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "false"
+  },
+  "description": "Whether to enable mouse support.",
+  "loc": [
+   "programs",
+   "tmux",
+   "mouse"
+  ],
+  "readOnly": false,
+  "type": "boolean"
+ },
+ "programs.tmux.shortcut": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/programs/tmux.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/programs/tmux.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "\"b\""
+  },
+  "description": "CTRL following by this key is used as the main shortcut.",
+  "loc": [
+   "programs",
+   "tmux",
+   "shortcut"
+  ],
+  "readOnly": false,
+  "type": "string"
+ },
+ "programs.tmux.terminal": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/programs/tmux.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/programs/tmux.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "\"screen\""
+  },
+  "description": "Set the $TERM variable.",
+  "loc": [
+   "programs",
+   "tmux",
+   "terminal"
+  ],
+  "readOnly": false,
+  "type": "string"
+ },
+ "programs.vscode.enable": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/programs/vscode.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/programs/vscode.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "false"
+  },
+  "description": "Whether to enable Visual Studio Code.",
+  "example": {
+   "_type": "literalExpression",
+   "text": "true"
+  },
+  "loc": [
+   "programs",
+   "vscode",
+   "enable"
+  ],
+  "readOnly": false,
+  "type": "boolean"
+ },
+ "programs.zsh.autosuggestion.enable": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/programs/zsh.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/programs/zsh.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "false"
+  },
+  "description": "Enable zsh autosuggestions.",
+  "loc": [
+   "programs",
+   "zsh",
+   "autosuggestion",
+   "enable"
+  ],
+  "readOnly": false,
+  "type": "boolean"
+ },
+ "programs.zsh.enable": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/programs/zsh.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/programs/zsh.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "false"
+  },
+  "description": "Whether to enable Z shell (Zsh).",
+  "example": {
+   "_type": "literalExpression",
+   "text": "true"
+  },
+  "loc": [
+   "programs",
+   "zsh",
+   "enable"
+  ],
+  "readOnly": false,
+  "type": "boolean"
+ },
+ "programs.zsh.history.size": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/programs/zsh.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/programs/zsh.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "10000"
+  },
+  "description": "Number of history lines to keep.",
+  "loc": [
+   "programs",
+   "zsh",
+   "history",
+   "size"
+  ],
+  "readOnly": false,
+  "type": "signed integer"
+ },
+ "programs.zsh.historySubstringSearch.enable": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/programs/zsh.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/programs/zsh.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "false"
+  },
+  "description": "Whether to enable history substring search.",
+  "loc": [
+   "programs",
+   "zsh",
+   "historySubstringSearch",
+   "enable"
+  ],
+  "readOnly": false,
+  "type": "boolean"
+ },
+ "programs.zsh.initExtra": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/programs/zsh.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/programs/zsh.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "\"\""
+  },
+  "description": "Extra commands that should be added to `.zshrc`.",
+  "loc": [
+   "programs",
+   "zsh",
+   "initExtra"
+  ],
+  "readOnly": false,
+  "type": "strings concatenated with \"\\n\""
+ },
+ "programs.zsh.shellAliases": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/programs/zsh.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/programs/zsh.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "{ }"
+  },
+  "description": "An attribute set that maps aliases to command strings.",
+  "example": {
+   "_type": "literalExpression",
+   "text": "{ ll = \"ls -l\"; }"
+  },
+  "loc": [
+   "programs",
+   "zsh",
+   "shellAliases"
+  ],
+  "readOnly": false,
+  "type": "attribute set of string"
+ },
+ "programs.zsh.syntaxHighlighting.enable": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/programs/zsh.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/programs/zsh.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "false"
+  },
+  "description": "Enable zsh syntax highlighting.",
+  "loc": [
+   "programs",
+   "zsh",
+   "syntaxHighlighting",
+   "enable"
+  ],
+  "readOnly": false,
+  "type": "boolean"
+ },
+ "services.gpg-agent.defaultCacheTtl": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/services/gpg-agent.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/services/gpg-agent.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "null"
+  },
+  "description": "Set the time a cache entry is valid to the given number of seconds.",
+  "loc": [
+   "services",
+   "gpg-agent",
+   "defaultCacheTtl"
+  ],
+  "readOnly": false,
+  "type": "null or signed integer"
+ },
+ "services.gpg-agent.enable": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/services/gpg-agent.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/services/gpg-agent.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "false"
+  },
+  "description": "Whether to enable GnuPG private key agent.",
+  "example": {
+   "_type": "literalExpression",
+   "text": "true"
+  },
+  "loc": [
+   "services",
+   "gpg-agent",
+   "enable"
+  ],
+  "readOnly": false,
+  "type": "boolean"
+ },
+ "services.gpg-agent.enableSshSupport": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/services/gpg-agent.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/services/gpg-agent.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "false"
+  },
+  "description": "Whether to use the GnuPG key agent for SSH keys.",
+  "loc": [
+   "services",
+   "gpg-agent",
+   "enableSshSupport"
+  ],
+  "readOnly": false,
+  "type": "boolean"
+ },
+ "xdg.configFile.<name>.source": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/xdg/configFile.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/xdg/configFile.nix"
+   }
+  ],
+  "description": "Path of the source file or directory.",
+  "loc": [
+   "xdg",
+   "configFile",
+   "<name>",
+   "source"
+  ],
+  "readOnly": false,
+  "type": "absolute path"
+ },
+ "xdg.configFile.<name>.text": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/xdg/configFile.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/xdg/configFile.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "null"
+  },
+  "description": "Text of the file.",
+  "loc": [
+   "xdg",
+   "configFile",
+   "<name>",
+   "text"
+  ],
+  "readOnly": false,
+  "type": "null or strings concatenated with \"\\n\""
+ },
+ "xdg.enable": {
+  "declarations": [
+   {
+    "name": "<home-manager/modules/xdg/enable.nix>",
+    "url": "https://github.com/nix-community/home-manager/blob/master/modules/xdg/enable.nix"
+   }
+  ],
+  "default": {
+   "_type": "literalExpression",
+   "text": "false"
+  },
+  "description": "Whether to enable management of XDG base directories.",
+  "example": {
+   "_type": "literalExpression",
+   "text": "true"
+  },
+  "loc": [
+   "xdg",
+   "enable"
+  ],
+  "readOnly": false,
+  "type": "boolean"
+ }
+}

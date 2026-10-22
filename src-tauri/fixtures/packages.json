@@ -1,0 +1,302 @@
+[
+ {
+  "attr": "ripgrep",
+  "pname": "ripgrep",
+  "version": "14.1.1",
+  "description": "Utility that combines the usability of The Silver Searcher with the raw speed of grep"
+ },
+ {
+  "attr": "fd",
+  "pname": "fd",
+  "version": "10.2.0",
+  "description": "Simple, fast and user-friendly alternative to find"
+ },
+ {
+  "attr": "bat",
+  "pname": "bat",
+  "version": "0.25.0",
+  "description": "Cat(1) clone with syntax highlighting and Git integration"
+ },
+ {
+  "attr": "eza",
+  "pname": "eza",
+  "version": "0.20.21",
+  "description": "Modern, maintained replacement for ls"
+ },
+ {
+  "attr": "jq",
+  "pname": "jq",
+  "version": "1.7.1",
+  "description": "Lightweight and flexible command-line JSON processor"
+ },
+ {
+  "attr": "yq-go",
+  "pname": "yq-go",
+  "version": "4.45.1",
+  "description": "Portable command-line YAML processor"
+ },
+ {
+  "attr": "htop",
+  "pname": "htop",
+  "version": "3.3.0",
+  "description": "Interactive process viewer"
+ },
+ {
+  "attr": "btop",
+  "pname": "btop",
+  "version": "1.4.0",
+  "description": "Monitor of resources"
+ },
+ {
+  "attr": "tmux",
+  "pname": "tmux",
+  "version": "3.5a",
+  "description": "Terminal multiplexer"
+ },
+ {
+  "attr": "neovim",
+  "pname": "neovim",
+  "version": "0.10.4",
+  "description": "Vim text editor fork focused on extensibility and agility"
+ },
+ {
+  "attr": "git",
+  "pname": "git",
+  "version": "2.47.2",
+  "description": "Distributed version control system"
+ },
+ {
+  "attr": "gh",
+  "pname": "gh",
+  "version": "2.67.0",
+  "description": "GitHub CLI tool"
+ },
+ {
+  "attr": "lazygit",
+  "pname": "lazygit",
+  "version": "0.47.2",
+  "description": "Simple terminal UI for git commands"
+ },
+ {
+  "attr": "delta",
+  "pname": "delta",
+  "version": "0.18.2",
+  "description": "Syntax-highlighting pager for git"
+ },
+ {
+  "attr": "fzf",
+  "pname": "fzf",
+  "version": "0.60.0",
+  "description": "Command-line fuzzy finder written in Go"
+ },
+ {
+  "attr": "zoxide",
+  "pname": "zoxide",
+  "version": "0.9.7",
+  "description": "Fast cd command that learns your habits"
+ },
+ {
+  "attr": "direnv",
+  "pname": "direnv",
+  "version": "2.35.0",
+  "description": "Shell extension that manages your environment"
+ },
+ {
+  "attr": "nodejs_22",
+  "pname": "nodejs_22",
+  "version": "22.14.0",
+  "description": "Event-driven I/O framework for the V8 JavaScript engine"
+ },
+ {
+  "attr": "pnpm",
+  "pname": "pnpm",
+  "version": "10.5.2",
+  "description": "Fast, disk space efficient package manager for JavaScript"
+ },
+ {
+  "attr": "python3",
+  "pname": "python3",
+  "version": "3.12.9",
+  "description": "High-level dynamically-typed programming language"
+ },
+ {
+  "attr": "python3Packages.black",
+  "pname": "black",
+  "version": "25.1.0",
+  "description": "Uncompromising Python code formatter"
+ },
+ {
+  "attr": "python3Packages.requests",
+  "pname": "requests",
+  "version": "2.32.3",
+  "description": "HTTP library for Python"
+ },
+ {
+  "attr": "rustup",
+  "pname": "rustup",
+  "version": "1.27.1",
+  "description": "Rust toolchain installer"
+ },
+ {
+  "attr": "go",
+  "pname": "go",
+  "version": "1.24.0",
+  "description": "Go Programming language"
+ },
+ {
+  "attr": "nixfmt-rfc-style",
+  "pname": "nixfmt-rfc-style",
+  "version": "0.6.0",
+  "description": "Official formatter for Nix code"
+ },
+ {
+  "attr": "nil",
+  "pname": "nil",
+  "version": "2024-08-06",
+  "description": "Yet another language server for Nix"
+ },
+ {
+  "attr": "nixd",
+  "pname": "nixd",
+  "version": "2.6.1",
+  "description": "Feature-rich Nix language server"
+ },
+ {
+  "attr": "alejandra",
+  "pname": "alejandra",
+  "version": "3.1.0",
+  "description": "Uncompromising Nix Code Formatter"
+ },
+ {
+  "attr": "wget",
+  "pname": "wget",
+  "version": "1.25.0",
+  "description": "Tool for retrieving files using HTTP, HTTPS, and FTP"
+ },
+ {
+  "attr": "curl",
+  "pname": "curl",
+  "version": "8.12.1",
+  "description": "Command line tool for transferring files with URL syntax"
+ },
+ {
+  "attr": "httpie",
+  "pname": "httpie",
+  "version": "3.2.4",
+  "description": "Command line HTTP client whose goal is to make CLI human-friendly"
+ },
+ {
+  "attr": "tree",
+  "pname": "tree",
+  "version": "2.2.1",
+  "description": "Command to produce a depth indented directory listing"
+ },
+ {
+  "attr": "watch",
+  "pname": "watch",
+  "version": "4.0.5",
+  "description": "Executes a program periodically, showing output fullscreen"
+ },
+ {
+  "attr": "dust",
+  "pname": "dust",
+  "version": "1.1.1",
+  "description": "du + rust = dust. Like du but more intuitive"
+ },
+ {
+  "attr": "duf",
+  "pname": "duf",
+  "version": "0.8.1",
+  "description": "Disk Usage/Free Utility"
+ },
+ {
+  "attr": "tldr",
+  "pname": "tldr",
+  "version": "1.6.1",
+  "description": "Simplified and community-driven man pages"
+ },
+ {
+  "attr": "ffmpeg",
+  "pname": "ffmpeg",
+  "version": "7.1",
+  "description": "Complete, cross-platform solution to record, convert and stream audio and video"
+ },
+ {
+  "attr": "imagemagick",
+  "pname": "imagemagick",
+  "version": "7.1.1-43",
+  "description": "Software suite to create, edit, compose, or convert bitmap images"
+ },
+ {
+  "attr": "postgresql_16",
+  "pname": "postgresql_16",
+  "version": "16.8",
+  "description": "Powerful, open source object-relational database system"
+ },
+ {
+  "attr": "redis",
+  "pname": "redis",
+  "version": "7.2.7",
+  "description": "Open source, advanced key-value store"
+ },
+ {
+  "attr": "docker-client",
+  "pname": "docker-client",
+  "version": "27.5.1",
+  "description": "Open source project to pack, ship and run any application as a lightweight container"
+ },
+ {
+  "attr": "kubectl",
+  "pname": "kubectl",
+  "version": "1.32.2",
+  "description": "Kubernetes CLI"
+ },
+ {
+  "attr": "k9s",
+  "pname": "k9s",
+  "version": "0.40.5",
+  "description": "Kubernetes CLI To Manage Your Clusters In Style"
+ },
+ {
+  "attr": "terraform",
+  "pname": "terraform",
+  "version": "1.11.0",
+  "description": "Tool for building, changing, and versioning infrastructure"
+ },
+ {
+  "attr": "awscli2",
+  "pname": "awscli2",
+  "version": "2.24.10",
+  "description": "Unified tool to manage your AWS services"
+ },
+ {
+  "attr": "starship",
+  "pname": "starship",
+  "version": "1.22.1",
+  "description": "Minimal, blazing fast, and extremely customizable prompt for any shell"
+ },
+ {
+  "attr": "hyperfine",
+  "pname": "hyperfine",
+  "version": "1.19.0",
+  "description": "Command-line benchmarking tool"
+ },
+ {
+  "attr": "tokei",
+  "pname": "tokei",
+  "version": "12.1.2",
+  "description": "Program that allows you to count your code, quickly"
+ },
+ {
+  "attr": "sd",
+  "pname": "sd",
+  "version": "1.0.0",
+  "description": "Intuitive find & replace CLI (sed alternative)"
+ },
+ {
+  "attr": "glow",
+  "pname": "glow",
+  "version": "2.0.0",
+  "description": "Render markdown on the CLI, with pizzazz!"
+ }
+]
