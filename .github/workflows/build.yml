@@ -1,7 +1,7 @@
 name: Build
 
 # Builds .deb and .rpm (Linux) and a universal .dmg (macOS).
-# Every run uploads the packages as workflow artifacts. Pushing a `v*` tag
+# Every run uploads each package as its own workflow artifact. Pushing a `v*` tag
 # also creates a draft GitHub release with them attached.
 on:
   push:
@@ -107,11 +107,26 @@ jobs:
           releaseBody: See the assets below for the .deb, .rpm and .dmg packages.
           releaseDraft: true
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload .deb
+        if: matrix.name == 'linux'
+        uses: actions/upload-artifact@v4
         with:
-          name: hm-gui-${{ matrix.name }}
-          path: |
-            ${{ matrix.bundle }}/deb/*.deb
-            ${{ matrix.bundle }}/rpm/*.rpm
-            ${{ matrix.bundle }}/dmg/*.dmg
+          name: hm-gui-deb
+          path: ${{ matrix.bundle }}/deb/*.deb
+          if-no-files-found: error
+
+      - name: Upload .rpm
+        if: matrix.name == 'linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: hm-gui-rpm
+          path: ${{ matrix.bundle }}/rpm/*.rpm
+          if-no-files-found: error
+
+      - name: Upload .dmg
+        if: matrix.name == 'macos'
+        uses: actions/upload-artifact@v4
+        with:
+          name: hm-gui-dmg
+          path: ${{ matrix.bundle }}/dmg/*.dmg
           if-no-files-found: error
