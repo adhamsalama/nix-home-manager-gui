@@ -40,12 +40,40 @@ pub fn search_packages(query: &str) -> Result<SearchResults> {
     })
 }
 
+/// Fixture packages that only build on Linux, to exercise platform warnings.
+const LINUX_ONLY: &[&str] = &["strace", "inotify-tools"];
+
+fn current_system() -> String {
+    let os = match std::env::consts::OS {
+        "macos" => "darwin",
+        os => os,
+    };
+    format!("{}-{os}", std::env::consts::ARCH)
+}
+
 pub fn package_details(attr: &str) -> Result<PackageDetails> {
     let found = search_packages(attr)?
         .packages
         .into_iter()
         .find(|p| p.attr == attr);
+    let platforms: Vec<String> = [
+        "x86_64-linux",
+        "aarch64-linux",
+        "x86_64-darwin",
+        "aarch64-darwin",
+    ]
+    .into_iter()
+    .filter(|s| !LINUX_ONLY.contains(&attr) || s.ends_with("-linux"))
+    .map(String::from)
+    .collect();
+    let system = current_system();
     Ok(PackageDetails {
+        available: platforms.contains(&system),
+        system: Some(system),
+        platforms,
+        bad_platforms: vec![],
+        broken: false,
+        unfree: false,
         attr: attr.to_string(),
         name: found.as_ref().map(|p| p.pname.clone()),
         version: found.as_ref().map(|p| p.version.clone()),

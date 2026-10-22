@@ -63,6 +63,12 @@ export interface PackageDetails {
   description: string | null;
   homepage: string | null;
   licenses: string[];
+  system: string | null;
+  platforms: string[];
+  badPlatforms: string[];
+  available: boolean;
+  broken: boolean;
+  unfree: boolean;
   source: string;
 }
 

@@ -298,5 +298,17 @@
   "pname": "glow",
   "version": "2.0.0",
   "description": "Render markdown on the CLI, with pizzazz!"
+ },
+ {
+  "attr": "strace",
+  "pname": "strace",
+  "version": "6.12",
+  "description": "System call tracer for Linux"
+ },
+ {
+  "attr": "inotify-tools",
+  "pname": "inotify-tools",
+  "version": "4.23.9.0",
+  "description": "Command line utilities for inotify (Linux only)"
  }
 ]

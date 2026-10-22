@@ -229,6 +229,16 @@ pub struct PackageDetails {
     pub description: Option<String>,
     pub homepage: Option<String>,
     pub licenses: Vec<String>,
+    /// The system it was evaluated for, e.g. `x86_64-linux`.
+    pub system: Option<String>,
+    /// `meta.platforms`; empty when the package doesn't restrict them.
+    pub platforms: Vec<String>,
+    pub bad_platforms: Vec<String>,
+    /// Whether it can be built on `system` with the current nixpkgs config:
+    /// false when it's unsupported there, broken, or unfree and not allowed.
+    pub available: bool,
+    pub broken: bool,
+    pub unfree: bool,
     /// Which nixpkgs it was read from, for display.
     pub source: String,
 }
@@ -337,12 +347,25 @@ const PACKAGE_DETAILS_EXPR: &str = r#"p:
     first = x: if builtins.isList x then (if x == [ ] then null else builtins.head x) else x;
     toList = x: if builtins.isList x then x else if x == null then [ ] else [ x ];
     license = l: if builtins.isAttrs l then (l.spdxId or l.fullName or "unknown") else toString l;
+    # meta.platforms can hold patterns like { kernel.name = "linux"; } besides system strings.
+    platform = x:
+      if builtins.isString x then x
+      else if x ? kernel.name then "*-${x.kernel.name}"
+      else "(pattern)";
+    # nixpkgs' meta checks can throw, e.g. for packages marked insecure.
+    safe = x: fallback: let t = builtins.tryEval x; in if t.success then t.value else fallback;
   in {
     name = p.pname or p.name or null;
     version = p.version or null;
     description = p.meta.description or null;
     homepage = first (p.meta.homepage or null);
     licenses = map license (toList (p.meta.license or null));
+    system = p.system or null;
+    platforms = map platform (safe (toList (p.meta.platforms or [ ])) [ ]);
+    badPlatforms = map platform (safe (toList (p.meta.badPlatforms or [ ])) [ ]);
+    available = safe (p.meta.available or true) false;
+    broken = safe (p.meta.broken or false) false;
+    unfree = safe (p.meta.unfree or false) false;
   }"#;
 
 pub async fn package_details(settings: &Settings, attr: &str) -> Result<PackageDetails> {
@@ -369,20 +392,29 @@ fn parse_details(json: &str, attr: &str, source: &str) -> Result<PackageDetails>
     let v: serde_json::Value =
         serde_json::from_str(json.trim()).context("nix returned invalid JSON")?;
     let text = |key: &str| v[key].as_str().map(str::to_string);
+    let strings = |key: &str| -> Vec<String> {
+        v[key]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|s| s.as_str().map(str::to_string))
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
     Ok(PackageDetails {
         attr: attr.to_string(),
         name: text("name"),
         version: text("version"),
         description: text("description"),
         homepage: text("homepage"),
-        licenses: v["licenses"]
-            .as_array()
-            .map(|a| {
-                a.iter()
-                    .filter_map(|l| l.as_str().map(str::to_string))
-                    .collect()
-            })
-            .unwrap_or_default(),
+        licenses: strings("licenses"),
+        system: text("system"),
+        platforms: strings("platforms"),
+        bad_platforms: strings("badPlatforms"),
+        available: v["available"].as_bool().unwrap_or(true),
+        broken: v["broken"].as_bool().unwrap_or(false),
+        unfree: v["unfree"].as_bool().unwrap_or(false),
         source: source.to_string(),
     })
 }
@@ -513,6 +545,11 @@ mod tests {
     }
 
     #[test]
+    fn package_details_expression_is_valid_nix() {
+        crate::nix_edit::validate_expr(PACKAGE_DETAILS_EXPR).unwrap();
+    }
+
+    #[test]
     fn parses_package_details() {
         let json = r#"{"name":"jq","version":"1.7.1","description":"JSON processor","homepage":"https://jqlang.github.io/jq/","licenses":["MIT"]}"#;
         let d = parse_details(json, "jq", "your nixpkgs channel").unwrap();
@@ -520,7 +557,15 @@ mod tests {
         assert_eq!(d.licenses, vec!["MIT"]);
         let sparse =
             r#"{"name":null,"version":null,"description":null,"homepage":null,"licenses":[]}"#;
-        assert_eq!(parse_details(sparse, "x", "s").unwrap().version, None);
+        let sparse = parse_details(sparse, "x", "s").unwrap();
+        assert_eq!(sparse.version, None);
+        assert!(sparse.available && sparse.platforms.is_empty());
+
+        let linux_only = r#"{"system":"aarch64-darwin","platforms":["x86_64-linux","*-linux"],"badPlatforms":[],"available":false,"broken":false,"unfree":false}"#;
+        let d = parse_details(linux_only, "strace", "s").unwrap();
+        assert!(!d.available);
+        assert_eq!(d.system.as_deref(), Some("aarch64-darwin"));
+        assert_eq!(d.platforms, vec!["x86_64-linux", "*-linux"]);
     }
 
     #[test]

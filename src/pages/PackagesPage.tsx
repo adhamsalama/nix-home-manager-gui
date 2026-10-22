@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { api, errorText, type HmOption, type PackageDetails, type Packages, type SearchResults } from "../api";
 import { relatedOptions } from "../packageOptions";
+import { groupPlatforms, unavailableReason } from "../platforms";
 
 interface Props {
   revision: number;
@@ -17,6 +18,8 @@ export function PackagesPage({ revision, onChanged, onOpenOption }: Props) {
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  const [checking, setChecking] = useState<string | null>(null);
+  const [warning, setWarning] = useState<{ attr: string; message: string } | null>(null);
 
   useEffect(() => {
     api
@@ -50,6 +53,22 @@ export function PackagesPage({ revision, onChanged, onOpenOption }: Props) {
     } catch (e) {
       setError(errorText(e));
     }
+  };
+
+  /** Checks that the package builds on this machine before adding it. */
+  const add = async (attr: string) => {
+    setWarning(null);
+    setChecking(attr);
+    let reason: string | null = null;
+    try {
+      reason = unavailableReason(await api.packageDetails(attr));
+    } catch {
+      // A failed check shouldn't block adding; the build will report problems.
+    } finally {
+      setChecking(null);
+    }
+    if (reason) setWarning({ attr, message: reason });
+    else await change(() => api.stageAddPackage(attr));
   };
 
   const installed = new Set(packages?.items ?? []);
@@ -119,7 +138,7 @@ export function PackagesPage({ revision, onChanged, onOpenOption }: Props) {
             {results && results.packages.length > 0 && (
               <table className="results">
                 <tbody>
-                  {results.packages.slice(0, 200).map((p) => (
+                  {results.packages.slice(0, 200).map((p) => [
                     <tr key={p.attr}>
                       <td>
                         <div className="option-name">{p.attr}</div>
@@ -130,13 +149,33 @@ export function PackagesPage({ revision, onChanged, onOpenOption }: Props) {
                         {installed.has(p.attr) ? (
                           <span className="badge ok">Added</span>
                         ) : (
-                          <button disabled={!!listError} onClick={() => change(() => api.stageAddPackage(p.attr))}>
-                            Add
+                          <button disabled={!!listError || checking !== null} onClick={() => add(p.attr)}>
+                            {checking === p.attr ? "Checking…" : "Add"}
                           </button>
                         )}
                       </td>
-                    </tr>
-                  ))}
+                    </tr>,
+                    warning?.attr === p.attr && (
+                      <tr key={`${p.attr}-warning`}>
+                        <td colSpan={3}>
+                          <div className="notice warn-notice">
+                            <p>{warning.message}</p>
+                            <div className="row">
+                              <button
+                                onClick={() => {
+                                  setWarning(null);
+                                  change(() => api.stageAddPackage(p.attr));
+                                }}
+                              >
+                                Add anyway
+                              </button>
+                              <button onClick={() => setWarning(null)}>Cancel</button>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    ),
+                  ])}
                 </tbody>
               </table>
             )}
@@ -197,8 +236,11 @@ function PackageDetail(props: {
         <>
           <div className="meta">
             {details.version && <span className="type">{details.version}</span>}
+            {details.unfree && <span className="badge warn">Unfree</span>}
+            {details.broken && <span className="badge bad">Broken</span>}
             <span className="muted small">from {details.source}</span>
           </div>
+          {unavailableReason(details) && <p className="notice warn-notice">{unavailableReason(details)}</p>}
           {details.description ? <p>{details.description}</p> : <p className="muted">No description.</p>}
           <dl className="facts">
             {details.homepage && (
@@ -211,6 +253,23 @@ function PackageDetail(props: {
                 </dd>
               </>
             )}
+            <dt>Platforms</dt>
+            <dd>
+              {details.platforms.length === 0 ? (
+                <span className="muted">Not restricted</span>
+              ) : (
+                <div className="stack">
+                  {groupPlatforms(details.platforms).map(([os, arches]) => (
+                    <div key={os}>
+                      <b>{os}</b> <span className="muted small">{arches.join(", ")}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {details.badPlatforms.length > 0 && (
+                <div className="muted small">Known not to work on: {details.badPlatforms.join(", ")}</div>
+              )}
+            </dd>
             {details.licenses.length > 0 && (
               <>
                 <dt>License</dt>
