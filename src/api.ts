@@ -76,6 +76,22 @@ export interface Generation {
   current: boolean;
 }
 
+export interface Channel {
+  name: string;
+  url: string | null;
+  version: string | null;
+  revision: string | null;
+  kind: "nixpkgs" | "home-manager" | "other";
+}
+
+export interface Channels {
+  user: Channel[];
+  system: Channel[];
+  userUpdated: number | null;
+  systemUpdated: number | null;
+  warnings: string[];
+}
+
 export type StagedValue = { kind: "json"; value: unknown } | { kind: "raw"; expr: string };
 
 export interface LogLine {
@@ -112,6 +128,11 @@ export const api = {
   startRun: (action: "build" | "switch") => invoke<string>("start_run", { action }),
   listGenerations: () => invoke<Generation[]>("list_generations"),
   activateGeneration: (id: number) => invoke<string>("activate_generation", { id }),
+  listChannels: () => invoke<Channels>("list_channels"),
+  addChannel: (name: string, url: string) => invoke<void>("add_channel", { name, url }),
+  removeChannel: (name: string) => invoke<void>("remove_channel", { name }),
+  startChannelUpdate: (name: string | null) => invoke<string>("start_channel_update", { name }),
+  rollbackChannels: () => invoke<string>("rollback_channels"),
 };
 
 export function onRunLog(cb: (l: LogLine) => void): Promise<UnlistenFn> {

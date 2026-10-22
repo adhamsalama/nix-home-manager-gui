@@ -5,6 +5,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, State};
 
+use crate::channels::{self, Channels};
 use crate::nix::{self, Generation, PackageInfo};
 use crate::nix_edit::{self, FileValue, Packages};
 use crate::options::HmOption;
@@ -327,4 +328,74 @@ pub async fn activate_generation(
         }
     }
     Ok(run_id)
+}
+
+#[tauri::command]
+pub async fn list_channels(state: State<'_, AppState>) -> CmdResult<Channels> {
+    match state.settings().mode {
+        Mode::Mock => Ok(state.mock.lock().unwrap().list_channels()),
+        Mode::Real => channels::list().await.map_err(err),
+    }
+}
+
+/// Adds a channel, or points an existing one at a new URL.
+#[tauri::command]
+pub async fn add_channel(state: State<'_, AppState>, name: String, url: String) -> CmdResult<()> {
+    let (name, url) = (name.trim(), url.trim());
+    match state.settings().mode {
+        Mode::Mock => state.mock.lock().unwrap().add_channel(name, url),
+        Mode::Real => channels::add(name, url).await,
+    }
+    .map_err(err)
+}
+
+#[tauri::command]
+pub async fn remove_channel(state: State<'_, AppState>, name: String) -> CmdResult<()> {
+    match state.settings().mode {
+        Mode::Mock => state.mock.lock().unwrap().remove_channel(&name),
+        Mode::Real => channels::remove(&name).await,
+    }
+    .map_err(err)
+}
+
+/// Starts `nix-channel --update`, for one channel or all of them.
+#[tauri::command]
+pub fn start_channel_update(
+    app: AppHandle,
+    state: State<AppState>,
+    name: Option<String>,
+) -> CmdResult<String> {
+    let args = channels::update_args(name.as_deref()).map_err(err)?;
+    if !state.run_lock.try_acquire() {
+        return Err("another command is already running".into());
+    }
+    let run_id = format!("run-{}", NEXT_RUN.fetch_add(1, Ordering::SeqCst));
+    let lock = state.run_lock.clone();
+    let id = run_id.clone();
+    match state.settings().mode {
+        Mode::Mock => {
+            let (lines, ok) = state.mock.lock().unwrap().update_channels(name.as_deref());
+            tauri::async_runtime::spawn(async move {
+                runner::run_simulated(app, id, lines, ok).await;
+                lock.release();
+            });
+        }
+        Mode::Real => {
+            tauri::async_runtime::spawn(async move {
+                runner::run_process(app, id, "nix-channel".into(), args).await;
+                lock.release();
+            });
+        }
+    }
+    Ok(run_id)
+}
+
+/// Undoes the last channel update or change.
+#[tauri::command]
+pub async fn rollback_channels(state: State<'_, AppState>) -> CmdResult<String> {
+    match state.settings().mode {
+        Mode::Mock => state.mock.lock().unwrap().rollback_channels(),
+        Mode::Real => channels::rollback().await,
+    }
+    .map_err(err)
 }

@@ -563,6 +563,27 @@ fieldset label:not(.radio) {
   background: var(--surface-2);
 }
 
+.warn-notice {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-top: 26px;
+}
+
+.section-head h3 {
+  margin: 0;
+}
+
+.row.actions {
+  margin-top: 12px;
+}
+
 .notice p {
   margin: 0 0 6px;
 }

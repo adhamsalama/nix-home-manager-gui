@@ -69,7 +69,7 @@ pub fn home_manager_available() -> bool {
 }
 
 /// Runs a command to completion and returns its stdout.
-async fn capture(program: &str, args: &[String]) -> Result<String> {
+pub(crate) async fn capture(program: &str, args: &[String]) -> Result<String> {
     let out = command(program)
         .args(args)
         .output()

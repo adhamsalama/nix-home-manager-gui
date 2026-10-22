@@ -1,3 +1,4 @@
+mod channels;
 mod commands;
 mod mock;
 mod nix;
@@ -97,6 +98,11 @@ pub fn run() {
             commands::start_run,
             commands::list_generations,
             commands::activate_generation,
+            commands::list_channels,
+            commands::add_channel,
+            commands::remove_channel,
+            commands::start_channel_update,
+            commands::rollback_channels,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

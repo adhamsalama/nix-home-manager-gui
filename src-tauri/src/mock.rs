@@ -2,8 +2,11 @@
 //! in-memory generations and simulated command output. File edits are not
 //! mocked; they go to a real sample file.
 
-use anyhow::Result;
+use std::time::{SystemTime, UNIX_EPOCH};
 
+use anyhow::{Result, bail};
+
+use crate::channels::{self, Channel, Channels};
 use crate::nix::{Generation, PackageInfo};
 use crate::nix_edit::{self, FileValue};
 use crate::options::HmOption;
@@ -44,6 +47,48 @@ pub fn eval_option(file_text: &str, loc: &[String], default: Option<&str>) -> Re
 
 pub struct MockState {
     pub generations: Vec<Generation>,
+    channels: Vec<Channel>,
+    /// Earlier channel states, for `nix-channel --rollback`.
+    channel_history: Vec<(Vec<Channel>, Option<u64>)>,
+    channels_updated: Option<u64>,
+    /// Bumped on each update so versions visibly change.
+    channel_serial: u64,
+}
+
+fn now() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs())
+}
+
+/// What a channel at `url` would contain after downloading it.
+fn mock_channel(name: &str, url: &str, serial: u64) -> Channel {
+    let release = url.rsplit(['/', '-']).find_map(|part| {
+        let part = part.trim_end_matches(".tar.gz");
+        let ok = part.len() == 5
+            && part.as_bytes()[2] == b'.'
+            && part.chars().filter(char::is_ascii_digit).count() == 4;
+        ok.then(|| part.to_string())
+    });
+    let revision = format!("{:0>12x}", 0x5eed_0000_u64 + serial * 7919);
+    let (kind, version) = if url.contains("home-manager") {
+        ("home-manager", release.unwrap_or_else(|| "26.11".into()))
+    } else if url.contains("nixos.org/channels") {
+        let version = match release {
+            Some(r) => format!("{r}.{}.{}", 880_000 + serial, &revision[..7]),
+            None => format!("26.11pre{}.{}", 880_000 + serial, &revision[..7]),
+        };
+        ("nixpkgs", version)
+    } else {
+        ("other", String::new())
+    };
+    Channel {
+        name: name.into(),
+        url: Some(url.into()),
+        version: (!version.is_empty()).then_some(version),
+        revision: (kind == "nixpkgs").then_some(revision),
+        kind,
+    }
 }
 
 impl Default for MockState {
@@ -65,11 +110,114 @@ impl Default for MockState {
             })
             .rev()
             .collect();
-        MockState { generations }
+        let channels = vec![
+            mock_channel(
+                "home-manager",
+                "https://github.com/nix-community/home-manager/archive/master.tar.gz",
+                0,
+            ),
+            mock_channel("nixpkgs", "https://nixos.org/channels/nixpkgs-unstable", 0),
+        ];
+        MockState {
+            generations,
+            channels,
+            channel_history: Vec::new(),
+            channels_updated: Some(now() - 3 * 86_400),
+            channel_serial: 1,
+        }
     }
 }
 
 impl MockState {
+    pub fn list_channels(&self) -> Channels {
+        let system = vec![mock_channel(
+            "nixpkgs",
+            "https://nixos.org/channels/nixpkgs-26.05-darwin",
+            0,
+        )];
+        Channels {
+            warnings: channels::warnings(&self.channels, &system),
+            user: self.channels.clone(),
+            system,
+            user_updated: self.channels_updated,
+            system_updated: Some(now() - 40 * 86_400),
+        }
+    }
+
+    /// Adds a channel, or changes the URL of an existing one. Like
+    /// `nix-channel --add`, nothing is downloaded until the next update.
+    pub fn add_channel(&mut self, name: &str, url: &str) -> Result<()> {
+        channels::validate(name, Some(url))?;
+        let pending = Channel {
+            name: name.into(),
+            url: Some(url.into()),
+            version: None,
+            revision: None,
+            kind: "other",
+        };
+        match self.channels.iter_mut().find(|c| c.name == name) {
+            Some(existing) => existing.url = Some(url.into()),
+            None => {
+                self.channels.push(pending);
+                self.channels.sort_by(|a, b| a.name.cmp(&b.name));
+            }
+        }
+        Ok(())
+    }
+
+    pub fn remove_channel(&mut self, name: &str) -> Result<()> {
+        let before = self.channels.len();
+        self.channels.retain(|c| c.name != name);
+        if self.channels.len() == before {
+            bail!("there's no channel named {name}");
+        }
+        Ok(())
+    }
+
+    pub fn update_channels(&mut self, name: Option<&str>) -> (Lines, bool) {
+        if let Some(name) = name
+            && !self.channels.iter().any(|c| c.name == name)
+        {
+            return (
+                vec![("stderr", format!("error: channel '{name}' does not exist"))],
+                false,
+            );
+        }
+        self.channel_history
+            .push((self.channels.clone(), self.channels_updated));
+        let serial = self.channel_serial;
+        self.channel_serial += 1;
+        let mut lines: Lines = vec![(
+            "info",
+            format!("$ nix-channel --update {}   (mock)", name.unwrap_or("")),
+        )];
+        for c in &mut self.channels {
+            if name.is_some_and(|n| n != c.name) {
+                continue;
+            }
+            let url = c.url.clone().unwrap_or_default();
+            lines.push(("stderr", "unpacking 1 channels...".into()));
+            lines.push(("stderr", format!("downloading '{url}'...")));
+            *c = mock_channel(&c.name, &url, serial);
+        }
+        lines.push((
+            "stderr",
+            "building '/nix/store/7x1…-user-environment.drv'...".into(),
+        ));
+        lines.push(("stdout", "created new channels generation".into()));
+        self.channels_updated = Some(now());
+        (lines, true)
+    }
+
+    pub fn rollback_channels(&mut self) -> Result<String> {
+        let Some((channels, updated)) = self.channel_history.pop() else {
+            bail!("no generation older than the current channels generation");
+        };
+        self.channels = channels;
+        self.channels_updated = updated;
+        Ok("switched to the previous channels generation".into())
+    }
+
     /// Simulates `home-manager build|switch`. A switch adds a generation.
     pub fn run_home_manager(&mut self, action: &str, file: &str, file_text: &str) -> (Lines, bool) {
         let mut lines: Lines = vec![(

@@ -6,6 +6,7 @@ A desktop GUI for [home-manager](https://github.com/nix-community/home-manager),
 - **Packages**: search nixpkgs and add or remove entries in `home.packages`.
 - **Review & apply**: see a diff of staged edits, save (a `.nix.bak` backup is kept), then run `home-manager build` or `switch` with live output.
 - **Generations**: list generations and roll back to one.
+- **Channels** (classic setups): list, add, change, remove and update your nix channels, undo the last update, and see root's channels read-only. Warns when nixpkgs and home-manager are on different releases.
 
 ## Development
 

@@ -1,19 +1,21 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, type Status } from "./api";
 import { ApplyPage } from "./pages/ApplyPage";
+import { ChannelsPage } from "./pages/ChannelsPage";
 import { GenerationsPage } from "./pages/GenerationsPage";
 import { OptionsPage } from "./pages/OptionsPage";
 import { PackagesPage } from "./pages/PackagesPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import "./App.css";
 
-type Page = "options" | "packages" | "apply" | "generations" | "settings";
+type Page = "options" | "packages" | "apply" | "generations" | "channels" | "settings";
 
 const NAV: { id: Page; label: string }[] = [
   { id: "options", label: "Options" },
   { id: "packages", label: "Packages" },
   { id: "apply", label: "Review & apply" },
   { id: "generations", label: "Generations" },
+  { id: "channels", label: "Channels" },
   { id: "settings", label: "Settings" },
 ];
 
@@ -92,6 +94,9 @@ export default function App() {
         </div>
         <div className="page-host" hidden={page !== "generations"}>
           <GenerationsPage revision={revision} />
+        </div>
+        <div className="page-host" hidden={page !== "channels"}>
+          <ChannelsPage onNavigate={setPage} />
         </div>
         <div className="page-host" hidden={page !== "settings"}>
           <SettingsPage status={status} onChanged={onSettingsChanged} />
