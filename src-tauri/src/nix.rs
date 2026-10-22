@@ -213,7 +213,17 @@ pub async fn eval_option(settings: &Settings, loc: &[String]) -> Result<String> 
 }
 
 pub async fn search_packages(query: &str) -> Result<Vec<PackageInfo>> {
-    let out = capture("nix", &nix_args(&["search", "nixpkgs", query, "--json"])).await?;
+    let mut args = nix_args(&["search", "nixpkgs", query, "--json"]);
+    let out = match capture("nix", &args).await {
+        // The eval cache remembers that an earlier evaluation failed, but not
+        // why. Retrying without it either succeeds (the failure was transient)
+        // or reports the real error.
+        Err(e) if format!("{e:#}").contains("cached failure") => {
+            args.push("--no-eval-cache".into());
+            capture("nix", &args).await?
+        }
+        result => result?,
+    };
     parse_search(&out)
 }
 

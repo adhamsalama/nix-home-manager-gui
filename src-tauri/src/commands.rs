@@ -191,6 +191,9 @@ pub async fn search_packages(
     if query.len() < 2 {
         return Err("type at least two characters".into());
     }
+    if query.starts_with('-') {
+        return Err("search terms can't start with '-'".into());
+    }
     match state.settings().mode {
         Mode::Mock => mock::search_packages(&query),
         Mode::Real => nix::search_packages(&query).await,
