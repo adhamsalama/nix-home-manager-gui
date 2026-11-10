@@ -72,6 +72,9 @@ export global PackagesState {
     in property <bool> has-next;
     // Progress or outcome of filtering local results by platform.
     in property <string> filter-note;
+    // Progress of building the package index; empty when idle.
+    in property <string> index-status;
+    in property <string> index-error;
     callback prev-page();
     callback next-page();
     callback add(string);
@@ -155,8 +158,19 @@ component SearchView inherits ScrollView {
                 }
             }
         }
-        if PackagesState.searching: Loading {
-            text: PackagesState.source == 1 ? "Searching search.nixos.org…" : "Searching your nixpkgs. The first search can take a while.";
+        if PackagesState.source == 0 && PackagesState.index-status != "": Loading {
+            text: "Indexing your nixpkgs so searches are instant. " + PackagesState.index-status;
+        }
+        if PackagesState.source == 0 && PackagesState.index-error != "" && !PackagesState.searching: Notice {
+            tone: "warn";
+            text: "Couldn't index your nixpkgs, so searching it will fail too:";
+            CodeBlock {
+                text: PackagesState.index-error;
+                error: true;
+            }
+        }
+        if PackagesState.searching && (PackagesState.source == 1 || PackagesState.index-status == ""): Loading {
+            text: PackagesState.source == 1 ? "Searching search.nixos.org…" : "Searching your nixpkgs…";
         }
         if PackagesState.source == 1 && !PackagesState.searching: Small {
             text: "search.nixos.org is instant but may list packages your own nixpkgs doesn't have. Adding a package still checks it against your nixpkgs.";

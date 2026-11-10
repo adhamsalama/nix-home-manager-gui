@@ -24,7 +24,18 @@ pub struct AppState {
     mock: Mutex<mock::MockState>,
     run_lock: Arc<RunLock>,
     runtime: tokio::runtime::Handle,
+    /// The SQLite package index of the user's nixpkgs (see `index`).
+    index_path: PathBuf,
+    /// Held while checking or building the index; remembers when the index
+    /// was last confirmed current, to skip asking nix again for a while.
+    index_checked: tokio::sync::Mutex<Option<std::time::Instant>>,
 }
+
+/// How long a confirmed-current index is trusted before nix is asked again
+/// whether nixpkgs changed.
+const INDEX_RECHECK: std::time::Duration = std::time::Duration::from_secs(60);
+/// Packages per `nix eval` when reading platforms for the index.
+const INDEX_PLATFORM_BATCH: usize = 5000;
 
 type CmdResult<T> = Result<T, String>;
 
@@ -84,6 +95,8 @@ impl AppState {
             mock: Mutex::new(mock::MockState::default()),
             run_lock: Arc::new(RunLock::default()),
             runtime,
+            index_path: data_dir.join("packages.sqlite"),
+            index_checked: tokio::sync::Mutex::new(None),
         })
     }
 
@@ -256,12 +269,85 @@ impl AppState {
             .map_err(err);
         }
         let mut results = match settings.mode {
-            Mode::Mock => mock::search_packages(&query),
-            Mode::Real => nix::search_packages(&settings, &query).await,
-        }
-        .map_err(err)?;
+            Mode::Mock => mock::search_packages(&query).map_err(err)?,
+            Mode::Real => {
+                let built = self.ensure_index(None).await?;
+                let path = self.index_path.clone();
+                let q = query.clone();
+                let packages = tokio::task::spawn_blocking(move || crate::index::search(&path, &q))
+                    .await
+                    .map_err(|e| e.to_string())?
+                    .map_err(err)?;
+                SearchResults {
+                    source: built.source,
+                    total: packages.len(),
+                    packages,
+                    paged: false,
+                }
+            }
+        };
         crate::search::rank_packages(&mut results.packages, &query);
         Ok(results)
+    }
+
+    /// Makes sure the package index matches the user's current nixpkgs,
+    /// building it if needed: one full `nix search` plus the platforms of
+    /// every package. Only one check or build runs at a time; searches wait.
+    pub async fn ensure_index(
+        &self,
+        progress: Option<nix::Progress>,
+    ) -> CmdResult<crate::index::Built> {
+        let mut checked = self.index_checked.lock().await;
+        let say = |m: &str| {
+            if let Some(p) = &progress {
+                p(m.to_string());
+            }
+        };
+        let existing = crate::index::built(&self.index_path);
+        if let (Some(at), Some(b)) = (*checked, &existing)
+            && at.elapsed() < INDEX_RECHECK
+        {
+            return Ok(b.clone());
+        }
+        let settings = self.settings();
+        say("Checking which nixpkgs you use…");
+        let (source, nixpkgs) = nix::nixpkgs_identity(&settings).await.map_err(err)?;
+        let wanted = crate::index::Built { nixpkgs, source };
+        if existing.as_ref() == Some(&wanted) {
+            *checked = Some(std::time::Instant::now());
+            return Ok(wanted);
+        }
+
+        say(
+            "Listing every package in your nixpkgs. This evaluates all of nixpkgs once and can take a few minutes…",
+        );
+        let mut packages = nix::list_all_packages(&settings).await.map_err(err)?;
+        let attrs: Vec<String> = packages.iter().map(|p| p.attr.clone()).collect();
+        // Best effort: without platforms the index still searches fine.
+        if let Ok(platforms) =
+            nix::package_platforms(&settings, &attrs, INDEX_PLATFORM_BATCH, progress.clone()).await
+        {
+            for p in &mut packages {
+                p.platforms = platforms.get(&p.attr).cloned().flatten();
+            }
+        }
+        say("Saving the package index…");
+        let path = self.index_path.clone();
+        let b = wanted.clone();
+        tokio::task::spawn_blocking(move || crate::index::write(&path, &b, &packages))
+            .await
+            .map_err(|e| e.to_string())?
+            .map_err(err)?;
+        *checked = Some(std::time::Instant::now());
+        Ok(wanted)
+    }
+
+    /// Makes the next search ask nix whether nixpkgs changed, e.g. after a
+    /// channel update.
+    pub fn recheck_index(&self) {
+        if let Ok(mut checked) = self.index_checked.try_lock() {
+            *checked = None;
+        }
     }
 
     /// `meta.platforms` of search results, which `nix search` doesn't report.
@@ -274,7 +360,7 @@ impl AppState {
                 .iter()
                 .map(|a| (a.clone(), Some(mock::platforms(a))))
                 .collect()),
-            Mode::Real => nix::package_platforms(&self.settings(), &attrs)
+            Mode::Real => nix::package_platforms(&self.settings(), &attrs, 1000, None)
                 .await
                 .map_err(err),
         }

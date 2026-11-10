@@ -292,32 +292,6 @@ fn nixpkgs_args(subcommand: &str, source: &Nixpkgs, attr: &str) -> Vec<String> {
     }
 }
 
-pub async fn search_packages(settings: &Settings, query: &str) -> Result<SearchResults> {
-    let mut errors = Vec::new();
-    // An empty result is final: falling back to unstable would offer
-    // packages the user's own nixpkgs doesn't have.
-    for (source, nixpkgs) in nixpkgs_sources(settings) {
-        let mut args = nixpkgs_args("search", &nixpkgs, "");
-        args.extend([query.to_string(), "--json".into()]);
-        match search_with_retry(args).await {
-            Ok(out) => {
-                let packages = parse_search(&out)?;
-                if packages.is_empty() {
-                    check_nixpkgs_evaluates(source, &nixpkgs).await?;
-                }
-                return Ok(SearchResults {
-                    source: source.to_string(),
-                    total: packages.len(),
-                    packages,
-                    paged: false,
-                });
-            }
-            Err(e) => errors.push(format!("Searching {source}: {e:#}")),
-        }
-    }
-    bail!("{}", errors.join("\n\n"))
-}
-
 /// `nix search` skips packages that fail to evaluate without saying why, so a
 /// nixpkgs that's broken as a whole looks like one with no matches. Evaluating
 /// a package everyone has tells the two apart and surfaces the real error.
@@ -370,11 +344,13 @@ fn parse_search(json: &str) -> Result<Vec<PackageInfo>> {
     Ok(out)
 }
 
-/// `meta.platforms` of several packages, keyed by attribute path. Takes the
-/// nixpkgs root (a flake or the imported channel) so one evaluation serves
-/// every package. Entries are null when a package can't be evaluated.
-const PLATFORMS_EXPR: &str = r#"attrs: x:
+/// `meta.platforms` of the packages listed in the JSON file named by
+/// `$HM_GUI_ATTRS_FILE`, keyed by attribute path. Applied to the nixpkgs root
+/// (a flake or the imported channel) so one evaluation serves every package.
+/// Entries are null when a package can't be evaluated.
+const PLATFORMS_EXPR: &str = r#"x:
   let
+    attrs = builtins.fromJSON (builtins.readFile (builtins.getEnv "HM_GUI_ATTRS_FILE"));
     pkgs = x.legacyPackages.${builtins.currentSystem} or x;
     lib = pkgs.lib;
     toList = v: if builtins.isList v then v else if v == null then [ ] else [ v ];
@@ -386,41 +362,96 @@ const PLATFORMS_EXPR: &str = r#"attrs: x:
     of = a: safe (map platform (toList ((lib.attrByPath (lib.splitString "." a) { } pkgs).meta.platforms or [ ])));
   in builtins.listToAttrs (map (a: { name = a; value = of a; }) attrs)"#;
 
+/// Called with a message as long work progresses.
+pub type Progress = std::sync::Arc<dyn Fn(String) + Send + Sync>;
+
+/// Arguments to evaluate an expression applied to the user's own nixpkgs.
+fn apply_to_own_nixpkgs(settings: &Settings, apply: &str) -> Vec<String> {
+    // Only the user's own nixpkgs: another one would mislead.
+    let (_, nixpkgs) = nixpkgs_sources(settings).swap_remove(0);
+    let mut args = match &nixpkgs {
+        Nixpkgs::Channel => nix_args(&["eval", "--expr", "import <nixpkgs> { }"]),
+        Nixpkgs::FlakeInput(dir) => nix_args(&["eval", "--inputs-from", dir, "nixpkgs"]),
+        Nixpkgs::Registry => nix_args(&["eval", "nixpkgs"]),
+    };
+    // `builtins.currentSystem`, `getEnv` and `<nixpkgs>` need impure evaluation.
+    args.extend([
+        "--impure".into(),
+        "--json".into(),
+        "--apply".into(),
+        apply.into(),
+    ]);
+    args
+}
+
 pub async fn package_platforms(
     settings: &Settings,
     attrs: &[String],
+    batch: usize,
+    progress: Option<Progress>,
 ) -> Result<std::collections::HashMap<String, Option<Vec<String>>>> {
     let attrs: Vec<&String> = attrs
         .iter()
         .filter(|a| crate::nix_edit::is_package_attr(a))
         .collect();
-    if attrs.is_empty() {
-        return Ok(Default::default());
-    }
-    // Only the user's own nixpkgs: platforms of another one would mislead.
-    let (_, nixpkgs) = nixpkgs_sources(settings).swap_remove(0);
     let mut found = std::collections::HashMap::new();
-    // Batches keep the command line short when filtering thousands of results.
-    for chunk in attrs.chunks(1000) {
-        let list = chunk
-            .iter()
-            .map(|a| format!("\"{a}\""))
-            .collect::<Vec<_>>()
-            .join(" ");
-        let apply = format!("({PLATFORMS_EXPR}) [ {list} ]");
-        let mut args = match &nixpkgs {
-            Nixpkgs::Channel => nix_args(&["eval", "--expr", "import <nixpkgs> { }"]),
-            Nixpkgs::FlakeInput(dir) => nix_args(&["eval", "--inputs-from", dir, "nixpkgs"]),
-            Nixpkgs::Registry => nix_args(&["eval", "nixpkgs"]),
-        };
-        // `builtins.currentSystem` and `<nixpkgs>` need impure evaluation.
-        args.extend(["--impure".into(), "--json".into(), "--apply".into(), apply]);
-        let out = capture("nix", &args).await?;
-        found.extend(serde_json::from_str::<
+    let args = apply_to_own_nixpkgs(settings, PLATFORMS_EXPR);
+    // The list goes through a file: Linux caps a single argument at 128 KiB.
+    let file = tempfile::NamedTempFile::new().context("couldn't create a temporary file")?;
+    for (i, chunk) in attrs.chunks(batch.max(1)).enumerate() {
+        if let Some(p) = &progress {
+            p(format!(
+                "Reading platforms: {} of {} packages",
+                (i * batch).min(attrs.len()),
+                attrs.len()
+            ));
+        }
+        std::fs::write(file.path(), serde_json::to_vec(chunk)?)?;
+        let out = command("nix")
+            .args(&args)
+            .env("HM_GUI_ATTRS_FILE", file.path())
+            .output()
+            .await
+            .context("couldn't run nix; is it installed?")?;
+        if !out.status.success() {
+            bail!(
+                "nix failed: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            );
+        }
+        found.extend(serde_json::from_slice::<
             std::collections::HashMap<String, Option<Vec<String>>>,
-        >(&out)?);
+        >(&out.stdout)?);
     }
     Ok(found)
+}
+
+/// Identifies the user's nixpkgs by the store path of its source, which
+/// changes whenever the channel or flake input is updated. Returns it with a
+/// label for display.
+pub async fn nixpkgs_identity(settings: &Settings) -> Result<(String, String)> {
+    let (label, nixpkgs) = nixpkgs_sources(settings).swap_remove(0);
+    let mut args = nixpkgs_args("eval", &nixpkgs, "path");
+    // `toString` keeps nix from copying the source into the store.
+    args.extend(["--raw".into(), "--apply".into(), "toString".into()]);
+    let path = capture("nix", &args).await?;
+    let path = path.trim();
+    // A channel's path is a symlink into the store; resolve it so updates show.
+    let resolved =
+        std::fs::canonicalize(path).map_or_else(|_| path.to_string(), |p| p.display().to_string());
+    Ok((label.to_string(), resolved))
+}
+
+/// Every package in the user's own nixpkgs, as `nix search` lists them.
+pub async fn list_all_packages(settings: &Settings) -> Result<Vec<PackageInfo>> {
+    let (source, nixpkgs) = nixpkgs_sources(settings).swap_remove(0);
+    let mut args = nixpkgs_args("search", &nixpkgs, "");
+    args.extend(["^".into(), "--json".into()]);
+    let packages = parse_search(&search_with_retry(args).await?)?;
+    if packages.is_empty() {
+        check_nixpkgs_evaluates(source, &nixpkgs).await?;
+    }
+    Ok(packages)
 }
 
 /// Summarizes a package's metadata as JSON-friendly values. `meta.homepage`

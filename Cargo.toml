@@ -15,13 +15,16 @@ similar = "3.2.0"
 anyhow = "1.0.104"
 dirs = "7.0.0"
 regex = "1.13.1"
-tokio = { version = "1.54.1", features = ["process", "io-util", "macros", "time", "fs", "rt-multi-thread"] }
+tokio = { version = "1.54.1", features = ["process", "io-util", "macros", "time", "fs", "sync", "rt-multi-thread"] }
 rowan = "0.16"
 open = "5"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 # HTTPS for search.nixos.org. rustls (with ring) is compiled in, so there is no
 # OpenSSL dependency; ~1.4 MB of binary.
 ureq = { version = "3", default-features = false, features = ["rustls"] }
+# The package index (src/index.rs). Bundled, so there's no system SQLite to match.
+rusqlite = { version = "0.41", features = ["bundled"] }
+tempfile = "3.27.0"
 png = { version = "0.18", optional = true }
 
 [features]
@@ -31,8 +34,6 @@ snapshot = ["dep:png"]
 [build-dependencies]
 slint-build = "1.18"
 
-[dev-dependencies]
-tempfile = "3.27.0"
 
 # No cross-crate LTO and the default codegen units: full LTO saved ~2 MB of
 # binary but tripled release build times (117 s vs 41 s to rebuild hm-gui).

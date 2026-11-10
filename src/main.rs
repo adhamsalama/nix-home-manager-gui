@@ -5,6 +5,7 @@ mod app;
 mod backend;
 mod channels;
 mod editor;
+mod index;
 mod mock;
 mod nix;
 mod nix_edit;

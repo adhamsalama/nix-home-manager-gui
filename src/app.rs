@@ -196,6 +196,7 @@ impl App {
         self.refresh();
         self.load_generations();
         self.load_channels();
+        self.prewarm_index();
         self.win.global::<ChannelsState>().set_suggestions(model(
             text::suggested_channel_urls().iter().map(s).collect(),
         ));
@@ -338,6 +339,7 @@ impl App {
             ui.set_summary(s(""));
             ui.set_no_results(false);
             app.show_package_page();
+            app.prewarm_index();
         });
         on!(PackagesState, on_add, |app, attr| app
             .add_package(attr.to_string()));
@@ -1008,6 +1010,29 @@ impl App {
         self.set_package_rows(&shown);
     }
 
+    /// Builds or refreshes the package index in the background, showing its
+    /// progress on the Packages page. Only in real mode with "Your nixpkgs".
+    fn prewarm_index(self: &Rc<Self>) {
+        let st = self.be.get_settings();
+        if st.mode != Mode::Real || st.package_search != PackageSearch::Nixpkgs {
+            return;
+        }
+        let progress: crate::nix::Progress = Arc::new(|msg| {
+            let _ = slint::invoke_from_event_loop(move || {
+                with_app(|app| app.win.global::<PackagesState>().set_index_status(s(msg)))
+            });
+        });
+        let be = self.be.clone();
+        self.spawn(
+            async move { be.ensure_index(Some(progress)).await },
+            |app, r| {
+                let ui = app.win.global::<PackagesState>();
+                ui.set_index_status(s(""));
+                ui.set_index_error(s(r.err().unwrap_or_default()));
+            },
+        );
+    }
+
     /// Starts a new search from the first page.
     fn search_packages(self: &Rc<Self>) {
         {
@@ -1042,6 +1067,7 @@ impl App {
                 ui.set_searching(false);
                 match r {
                     Ok(res) => {
+                        ui.set_index_error(s(""));
                         let n = res.total;
                         ui.set_summary(s(format!(
                             "Searched {}: {n} result{}.",
@@ -1390,6 +1416,9 @@ impl App {
                     RunTarget::Channels => {
                         self.win.global::<ChannelsState>().set_update_ok(success);
                         self.load_channels();
+                        // The channel's nixpkgs may be new; refresh the index for it.
+                        self.be.recheck_index();
+                        self.prewarm_index();
                     }
                 }
             }
@@ -1530,6 +1559,8 @@ impl App {
                 self.refresh();
                 self.load_generations();
                 self.load_channels();
+                self.be.recheck_index();
+                self.prewarm_index();
             }
             Err(e) => {
                 ui.set_message(s(e));
