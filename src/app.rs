@@ -183,6 +183,10 @@ impl App {
                 .global::<Shell>()
                 .set_page(page.parse().unwrap_or(0));
         }
+        if let Ok(attr) = std::env::var("HM_GUI_PACKAGE") {
+            self.win.global::<Shell>().set_page(1);
+            self.select_package(Some(attr));
+        }
         if let Ok(name) = std::env::var("HM_GUI_SELECT") {
             self.focus_option(&name);
         }
@@ -284,6 +288,9 @@ impl App {
         });
         on!(PackagesState, on_remove, |app, attr| {
             let r = app.be.stage_remove_package(attr.to_string());
+            if r.is_ok() {
+                app.select_package(None);
+            }
             app.after_package_change(r);
         });
         on!(PackagesState, on_open_option, |app, name| app
@@ -770,15 +777,11 @@ impl App {
                 ui.set_installed(model(p.items.iter().map(s).collect()));
                 let mut pk = self.pkgs.borrow_mut();
                 pk.installed = p.items.into_iter().collect();
-                // Close the details of a package that was just removed.
-                if pk
-                    .selected
-                    .as_ref()
-                    .is_some_and(|sel| !pk.installed.contains(sel))
-                {
-                    pk.selected = None;
-                    ui.set_selected(s(""));
-                }
+                ui.set_d_installed(
+                    pk.selected
+                        .as_ref()
+                        .is_some_and(|sel| pk.installed.contains(sel)),
+                );
             }
             Err(e) => ui.set_list_error(s(e)),
         }
@@ -887,8 +890,13 @@ impl App {
 
     fn select_package(self: &Rc<Self>, attr: Option<String>) {
         let ui = self.win.global::<PackagesState>();
-        self.pkgs.borrow_mut().selected = attr.clone();
+        let installed = {
+            let mut pk = self.pkgs.borrow_mut();
+            pk.selected = attr.clone();
+            attr.as_ref().is_some_and(|a| pk.installed.contains(a))
+        };
         ui.set_selected(s(attr.as_deref().unwrap_or("")));
+        ui.set_d_installed(installed);
         let Some(attr) = attr else { return };
         let generation = self.bump();
         ui.set_d_loading(true);

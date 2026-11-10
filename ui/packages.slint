@@ -26,6 +26,8 @@ export global PackagesState {
     in property <bool> defined: true;
     in property <string> list-error;
     in property <string> selected;
+    // Whether the selected package is in home.packages.
+    in property <bool> d-installed;
 
     in-out property <string> query;
     in property <bool> searching;
@@ -114,16 +116,26 @@ component SearchView inherits ScrollView {
                 spacing: 12px;
                 padding-top: 6px;
                 padding-bottom: 6px;
-                VerticalLayout {
+                Rectangle {
                     horizontal-stretch: 1;
-                    spacing: 2px;
-                    Mono {
-                        text: p.attr;
-                        font-weight: 600;
-                        wrap: char-wrap;
+                    // Opens the package's details: homepage, platforms, options.
+                    open := TouchArea {
+                        mouse-cursor: pointer;
+                        clicked => {
+                            PackagesState.select(p.attr);
+                        }
                     }
-                    if p.description != "": Small {
-                        text: p.description;
+                    VerticalLayout {
+                        spacing: 2px;
+                        Mono {
+                            text: p.attr;
+                            font-weight: 600;
+                            wrap: char-wrap;
+                            color: open.has-hover ? Theme.link : Theme.fg;
+                        }
+                        if p.description != "": Small {
+                            text: p.description;
+                        }
                     }
                 }
                 Muted {
@@ -280,10 +292,18 @@ component PackageDetail inherits ScrollView {
         }
         HorizontalLayout {
             alignment: start;
-            Button {
+            if PackagesState.d-installed: Button {
                 text: "Remove from home.packages";
                 clicked => {
                     PackagesState.remove(PackagesState.selected);
+                }
+            }
+            if !PackagesState.d-installed: Button {
+                primary: PackagesState.d-reason == "";
+                enabled: PackagesState.list-error == "";
+                text: PackagesState.d-reason == "" ? "Add to home.packages" : "Add anyway";
+                clicked => {
+                    PackagesState.add-anyway(PackagesState.selected);
                 }
             }
         }

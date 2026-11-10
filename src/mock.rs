@@ -78,7 +78,8 @@ pub fn package_details(attr: &str) -> Result<PackageDetails> {
         name: found.as_ref().map(|p| p.pname.clone()),
         version: found.as_ref().map(|p| p.version.clone()),
         description: found.map(|p| p.description),
-        homepage: None,
+        // A real page, so the link can be tried in mock mode.
+        homepage: Some(format!("https://search.nixos.org/packages?query={attr}")),
         licenses: vec![],
         source: "mock data".into(),
     })
