@@ -1,0 +1,363 @@
+import { Button, LineEdit, ListView, ScrollView } from "std-widgets.slint";
+import { Theme, Muted, Small, H2, H3, Mono, ErrorText, Badge, Notice, CodeBlock, Link, ListRow, Dot, Loading, Divider } from "common.slint";
+
+export struct PkgRow {
+    attr: string,
+    description: string,
+    version: string,
+    installed: bool,
+    checking: bool,
+    warning: string,
+}
+
+export struct PlatformRow {
+    os: string,
+    arches: string,
+}
+
+export struct RelatedRow {
+    name: string,
+    type: string,
+    set: bool,
+}
+
+export global PackagesState {
+    in property <[string]> installed;
+    in property <bool> defined: true;
+    in property <string> list-error;
+    in property <string> selected;
+
+    in-out property <string> query;
+    in property <bool> searching;
+    in property <string> error;
+    in property <string> summary;
+    in property <bool> no-results;
+    in property <[PkgRow]> results;
+    in property <bool> checking-any;
+
+    in property <bool> d-loading;
+    in property <string> d-error;
+    in property <string> d-version;
+    in property <bool> d-unfree;
+    in property <bool> d-broken;
+    in property <string> d-source;
+    in property <string> d-reason;
+    in property <string> d-description;
+    in property <string> d-homepage;
+    in property <[PlatformRow]> d-platforms;
+    in property <string> d-bad-platforms;
+    in property <string> d-licenses;
+
+    in property <bool> r-loading;
+    in property <string> r-error;
+    in property <string> r-modules;
+    in property <[RelatedRow]> related;
+
+    callback select(string);
+    callback back();
+    callback search();
+    callback add(string);
+    callback add-anyway(string);
+    callback cancel-warning();
+    callback remove(string);
+    callback open-option(string);
+    callback open-url(string);
+}
+
+component SearchView inherits ScrollView {
+    VerticalLayout {
+        width: root.visible-width;
+        padding: 24px;
+        spacing: 12px;
+        alignment: start;
+        H2 {
+            text: "Find packages";
+        }
+        HorizontalLayout {
+            spacing: 8px;
+            LineEdit {
+                placeholder-text: "Search nixpkgs, e.g. ripgrep";
+                text <=> PackagesState.query;
+                accepted => {
+                    if !PackagesState.searching && PackagesState.query.character-count >= 2 {
+                        PackagesState.search();
+                    }
+                }
+            }
+            Button {
+                primary: true;
+                text: PackagesState.searching ? "Searching…" : "Search";
+                enabled: !PackagesState.searching && PackagesState.query.character-count >= 2;
+                clicked => {
+                    PackagesState.search();
+                }
+            }
+        }
+        if PackagesState.searching: Loading {
+            text: "Searching nixpkgs. The first search can take a while.";
+        }
+        if PackagesState.error != "": ErrorText {
+            text: PackagesState.error;
+        }
+        if PackagesState.summary != "": Small {
+            text: PackagesState.summary;
+        }
+        if PackagesState.no-results: Notice {
+            text: "No packages found.";
+            Small {
+                text: "If you expected results, nixpkgs may have failed to evaluate: nix search hides those errors. To see the real error, run nix eval nixpkgs#hello.name --no-eval-cache in a terminal.";
+            }
+        }
+        for p in PackagesState.results: VerticalLayout {
+            spacing: 6px;
+            HorizontalLayout {
+                spacing: 12px;
+                padding-top: 6px;
+                padding-bottom: 6px;
+                VerticalLayout {
+                    horizontal-stretch: 1;
+                    spacing: 2px;
+                    Mono {
+                        text: p.attr;
+                        font-weight: 600;
+                        wrap: char-wrap;
+                    }
+                    if p.description != "": Small {
+                        text: p.description;
+                    }
+                }
+                Muted {
+                    text: p.version;
+                    vertical-alignment: center;
+                    horizontal-stretch: 0;
+                }
+                VerticalLayout {
+                    alignment: center;
+                    horizontal-stretch: 0;
+                    width: 96px;
+                    if p.installed: Badge {
+                        text: "Added";
+                        tone: "ok";
+                    }
+                    if !p.installed: Button {
+                        text: p.checking ? "Checking…" : "Add";
+                        enabled: PackagesState.list-error == "" && !PackagesState.checking-any;
+                        clicked => {
+                            PackagesState.add(p.attr);
+                        }
+                    }
+                }
+            }
+            if p.warning != "": Notice {
+                tone: "warn";
+                text: p.warning;
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    Button {
+                        text: "Add anyway";
+                        clicked => {
+                            PackagesState.add-anyway(p.attr);
+                        }
+                    }
+                    Button {
+                        text: "Cancel";
+                        clicked => {
+                            PackagesState.cancel-warning();
+                        }
+                    }
+                }
+            }
+            Divider { }
+        }
+    }
+}
+
+component PackageDetail inherits ScrollView {
+    VerticalLayout {
+        width: root.visible-width;
+        padding: 24px;
+        spacing: 12px;
+        alignment: start;
+        Link {
+            text: "← Back to search";
+            clicked => {
+                PackagesState.back();
+            }
+        }
+        Mono {
+            text: PackagesState.selected;
+            font-size: 18px;
+            font-weight: 600;
+            wrap: char-wrap;
+        }
+        if PackagesState.d-error != "": CodeBlock {
+            text: PackagesState.d-error;
+            error: true;
+        }
+        if PackagesState.d-loading: Loading {
+            text: "Looking up the package…";
+        }
+        if !PackagesState.d-loading && PackagesState.d-error == "": VerticalLayout {
+            spacing: 12px;
+            HorizontalLayout {
+                spacing: 8px;
+                alignment: start;
+                if PackagesState.d-version != "": Badge {
+                    text: PackagesState.d-version;
+                }
+                if PackagesState.d-unfree: Badge {
+                    text: "Unfree";
+                    tone: "warn";
+                }
+                if PackagesState.d-broken: Badge {
+                    text: "Broken";
+                    tone: "bad";
+                }
+                Small {
+                    text: "from " + PackagesState.d-source;
+                    vertical-alignment: center;
+                }
+            }
+            if PackagesState.d-reason != "": Notice {
+                tone: "warn";
+                text: PackagesState.d-reason;
+            }
+            Text {
+                text: PackagesState.d-description != "" ? PackagesState.d-description : "No description.";
+                color: PackagesState.d-description != "" ? Theme.fg : Theme.muted;
+                wrap: word-wrap;
+            }
+            if PackagesState.d-homepage != "": VerticalLayout {
+                spacing: 4px;
+                Small {
+                    text: "Homepage";
+                    font-weight: 600;
+                }
+                Link {
+                    text: PackagesState.d-homepage;
+                    clicked => {
+                        PackagesState.open-url(PackagesState.d-homepage);
+                    }
+                }
+            }
+            VerticalLayout {
+                spacing: 4px;
+                Small {
+                    text: "Platforms";
+                    font-weight: 600;
+                }
+                if PackagesState.d-platforms.length == 0: Muted {
+                    text: "Not restricted";
+                }
+                for p in PackagesState.d-platforms: HorizontalLayout {
+                    spacing: 6px;
+                    alignment: start;
+                    Text {
+                        text: p.os;
+                        font-weight: 600;
+                    }
+                    Small {
+                        text: p.arches;
+                        vertical-alignment: center;
+                    }
+                }
+                if PackagesState.d-bad-platforms != "": Small {
+                    text: "Known not to work on: " + PackagesState.d-bad-platforms;
+                }
+            }
+            if PackagesState.d-licenses != "": VerticalLayout {
+                spacing: 4px;
+                Small {
+                    text: "License";
+                    font-weight: 600;
+                }
+                Text {
+                    text: PackagesState.d-licenses;
+                    wrap: word-wrap;
+                }
+            }
+        }
+        HorizontalLayout {
+            alignment: start;
+            Button {
+                text: "Remove from home.packages";
+                clicked => {
+                    PackagesState.remove(PackagesState.selected);
+                }
+            }
+        }
+
+        H3 {
+            text: "Configuration options";
+        }
+        if PackagesState.r-error != "": ErrorText {
+            text: "Couldn't load home-manager options: " + PackagesState.r-error;
+        }
+        if PackagesState.r-loading: Loading { }
+        if !PackagesState.r-loading && PackagesState.r-error == "" && PackagesState.related.length == 0: Muted {
+            text: "home-manager has no module for this package, so it's configured outside home-manager (or through home.file / xdg.configFile).";
+        }
+        if PackagesState.related.length > 0: Notice {
+            text: "home-manager has a module for this: " + PackagesState.r-modules + ". Enabling it installs the package and manages its configuration, so you won't need it in home.packages as well.";
+        }
+        for o in PackagesState.related: ListRow {
+            clicked => {
+                PackagesState.open-option(o.name);
+            }
+            Mono {
+                text: o.name;
+                font-size: 12px;
+                horizontal-stretch: 1;
+                overflow: elide;
+            }
+            Small {
+                text: o.type;
+                horizontal-stretch: 0;
+                max-width: 260px;
+                overflow: elide;
+                wrap: no-wrap;
+            }
+            if o.set: VerticalLayout {
+                alignment: center;
+                Dot { }
+            }
+        }
+    }
+}
+
+export component PackagesPage inherits HorizontalLayout {
+    VerticalLayout {
+        width: 300px;
+        padding: 12px;
+        spacing: 8px;
+        H3 {
+            text: "home.packages";
+        }
+        if !PackagesState.defined: Muted {
+            text: "Not set yet. Adding a package creates it.";
+        }
+        if PackagesState.list-error != "": ErrorText {
+            text: PackagesState.list-error;
+        }
+        ListView {
+            for name in PackagesState.installed: ListRow {
+                selected: name == PackagesState.selected;
+                clicked => {
+                    PackagesState.select(name);
+                }
+                Mono {
+                    text: name;
+                    font-size: 12px;
+                    overflow: elide;
+                }
+            }
+        }
+    }
+    Rectangle {
+        width: 1px;
+        background: Theme.border;
+    }
+    if PackagesState.selected == "": SearchView { }
+    if PackagesState.selected != "": PackageDetail { }
+}

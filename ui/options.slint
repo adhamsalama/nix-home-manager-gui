@@ -1,0 +1,478 @@
+import { Button, CheckBox, ComboBox, LineEdit, ListView, Palette, ScrollView, Switch, TextEdit } from "std-widgets.slint";
+import { Theme, Muted, Small, H2, H3, Mono, ErrorText, Badge, Notice, CodeBlock, Link, ListRow, Dot, Loading } from "common.slint";
+
+export struct OptionRow {
+    name: string,
+    set: bool,
+}
+
+export struct Placeholder {
+    index: int,
+    prefix: string,
+    name: string,
+    value: string,
+}
+
+export struct MapEntry {
+    key: string,
+    value: string,
+}
+
+export global OptionsState {
+    in property <bool> loading: true;
+    in property <string> load-error;
+    in property <int> total;
+    in-out property <string> query;
+    in-out property <bool> only-set;
+    in property <[OptionRow]> results;
+    in property <string> results-note;
+    in property <string> selected;
+
+    // The selected option.
+    in property <string> d-type;
+    in property <styled-text> d-description;
+    in property <string> d-default;
+    in property <bool> d-has-default;
+    in property <string> d-example;
+    in property <bool> d-has-example;
+    in property <string> d-declarations;
+    in property <[Placeholder]> placeholders;
+    in property <bool> complete;
+    // "loading", "notSet", "set", "partial", "opaque" or "error"
+    in property <string> file-state;
+    in property <int> file-line;
+    in property <string> file-expr;
+    in property <string> file-error;
+    in property <bool> read-only;
+
+    // The editor form.
+    in property <string> widget;
+    in property <bool> nullable;
+    in property <bool> multiline;
+    in-out property <bool> raw;
+    in-out property <bool> is-null;
+    in-out property <bool> bool-value;
+    in-out property <string> text-value;
+    in property <[string]> enum-values;
+    in-out property <int> enum-index;
+    in property <[string]> list-items;
+    in property <[MapEntry]> map-entries;
+    in-out property <string> raw-expr;
+    in property <string> editor-error;
+
+    in property <bool> eval-busy;
+    in property <string> eval-value;
+    in property <string> eval-error;
+
+    callback search-changed();
+    callback select(string);
+    callback retry();
+    callback fill(int, string);
+    callback list-edit(int, string);
+    callback list-remove(int);
+    callback list-add();
+    callback map-edit(int, string, string);
+    callback map-remove(int);
+    callback map-add();
+    callback stage();
+    callback remove();
+    callback evaluate();
+}
+
+component NullToggle inherits CheckBox {
+    text: "null";
+    checked <=> OptionsState.is-null;
+}
+
+component Tab inherits Rectangle {
+    in property <string> text;
+    in property <bool> active;
+    in property <bool> enabled: true;
+    callback clicked();
+    height: 28px;
+    border-radius: 4px;
+    background: active ? Theme.selected : touch.has-hover && enabled ? Theme.hover : transparent;
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => {
+            root.clicked();
+        }
+    }
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 12px;
+        Text {
+            text: root.text;
+            vertical-alignment: center;
+            color: root.enabled ? Theme.fg : Theme.muted;
+            font-weight: root.active ? 600 : 400;
+        }
+    }
+}
+
+component FormWidget inherits VerticalLayout {
+    spacing: 6px;
+    if OptionsState.widget == "bool": HorizontalLayout {
+        spacing: 16px;
+        alignment: start;
+        Switch {
+            enabled: !OptionsState.is-null;
+            checked <=> OptionsState.bool-value;
+            text: OptionsState.is-null ? "null" : OptionsState.bool-value ? "true" : "false";
+        }
+        if OptionsState.nullable: NullToggle { }
+    }
+    if OptionsState.widget == "string": VerticalLayout {
+        spacing: 6px;
+        if !OptionsState.is-null && OptionsState.multiline: TextEdit {
+            height: 160px;
+            text <=> OptionsState.text-value;
+        }
+        if !OptionsState.is-null && !OptionsState.multiline: LineEdit {
+            text <=> OptionsState.text-value;
+        }
+        if OptionsState.nullable: NullToggle { }
+    }
+    if OptionsState.widget == "number": HorizontalLayout {
+        spacing: 16px;
+        alignment: start;
+        if !OptionsState.is-null: LineEdit {
+            width: 200px;
+            text <=> OptionsState.text-value;
+        }
+        if OptionsState.nullable: NullToggle { }
+    }
+    if OptionsState.widget == "enum": HorizontalLayout {
+        spacing: 16px;
+        alignment: start;
+        if !OptionsState.is-null: ComboBox {
+            min-width: 200px;
+            model: OptionsState.enum-values;
+            current-index <=> OptionsState.enum-index;
+        }
+        if OptionsState.nullable: NullToggle { }
+    }
+    if OptionsState.widget == "stringList": VerticalLayout {
+        spacing: 6px;
+        for item[i] in OptionsState.list-items: HorizontalLayout {
+            spacing: 6px;
+            LineEdit {
+                text: item;
+                edited(t) => {
+                    OptionsState.list-edit(i, t);
+                }
+            }
+            Button {
+                text: "×";
+                clicked => {
+                    OptionsState.list-remove(i);
+                }
+            }
+        }
+        Link {
+            text: "+ Add item";
+            clicked => {
+                OptionsState.list-add();
+            }
+        }
+    }
+    if OptionsState.widget == "stringMap": VerticalLayout {
+        spacing: 6px;
+        for entry[i] in OptionsState.map-entries: HorizontalLayout {
+            spacing: 6px;
+            key := LineEdit {
+                width: 180px;
+                placeholder-text: "name";
+                text: entry.key;
+                edited(t) => {
+                    OptionsState.map-edit(i, t, value.text);
+                }
+            }
+            Muted {
+                text: "=";
+                vertical-alignment: center;
+            }
+            value := LineEdit {
+                placeholder-text: "value";
+                text: entry.value;
+                edited(t) => {
+                    OptionsState.map-edit(i, key.text, t);
+                }
+            }
+            Button {
+                text: "×";
+                clicked => {
+                    OptionsState.map-remove(i);
+                }
+            }
+        }
+        Link {
+            text: "+ Add entry";
+            clicked => {
+                OptionsState.map-add();
+            }
+        }
+    }
+}
+
+component Editor inherits VerticalLayout {
+    spacing: 10px;
+    HorizontalLayout {
+        spacing: 4px;
+        alignment: start;
+        Tab {
+            text: "Form";
+            active: !OptionsState.raw;
+            enabled: OptionsState.widget != "raw";
+            clicked => {
+                OptionsState.raw = false;
+            }
+        }
+        Tab {
+            text: "Nix expression";
+            active: OptionsState.raw;
+            clicked => {
+                OptionsState.raw = true;
+            }
+        }
+    }
+    if OptionsState.raw: TextEdit {
+        height: 180px;
+        text <=> OptionsState.raw-expr;
+    }
+    if !OptionsState.raw: FormWidget { }
+    if OptionsState.editor-error != "": ErrorText {
+        text: OptionsState.editor-error;
+    }
+    HorizontalLayout {
+        spacing: 8px;
+        alignment: start;
+        Button {
+            primary: true;
+            text: OptionsState.file-state == "set" ? "Stage change" : "Add to file";
+            clicked => {
+                OptionsState.stage();
+            }
+        }
+        if OptionsState.file-state == "set": Button {
+            text: "Remove from file";
+            clicked => {
+                OptionsState.remove();
+            }
+        }
+    }
+}
+
+component Fact inherits VerticalLayout {
+    in property <string> label;
+    spacing: 4px;
+    Small {
+        text: root.label;
+        font-weight: 600;
+    }
+    @children
+}
+
+component OptionDetail inherits ScrollView {
+    VerticalLayout {
+        width: root.visible-width;
+        padding: 24px;
+        spacing: 12px;
+        alignment: start;
+        Mono {
+            text: OptionsState.selected;
+            font-size: 18px;
+            font-weight: 600;
+            wrap: char-wrap;
+        }
+        HorizontalLayout {
+            spacing: 8px;
+            alignment: start;
+            Badge {
+                text: OptionsState.d-type;
+            }
+            if OptionsState.file-state == "set": Badge {
+                text: "Set on line \{OptionsState.file-line}";
+                tone: "ok";
+            }
+        }
+        StyledText {
+            text: OptionsState.d-description;
+            default-color: Theme.fg;
+            link-color: Theme.link;
+        }
+        if OptionsState.d-has-default: Fact {
+            label: "Default";
+            CodeBlock {
+                text: OptionsState.d-default;
+            }
+        }
+        if OptionsState.d-has-example: Fact {
+            label: "Example";
+            CodeBlock {
+                text: OptionsState.d-example;
+            }
+        }
+        if OptionsState.d-declarations != "": Fact {
+            label: "Declared in";
+            Muted {
+                text: OptionsState.d-declarations;
+            }
+        }
+
+        H3 {
+            text: "In your file";
+        }
+        for p in OptionsState.placeholders: VerticalLayout {
+            spacing: 4px;
+            Mono {
+                text: p.prefix + "." + p.name;
+                font-size: 12px;
+                color: Theme.muted;
+            }
+            LineEdit {
+                placeholder-text: "e.g. foo.conf";
+                text: p.value;
+                edited(t) => {
+                    OptionsState.fill(p.index, t);
+                }
+            }
+        }
+        if !OptionsState.complete: Muted {
+            text: "Fill in the names above to edit this option.";
+        }
+        if OptionsState.complete && OptionsState.file-state == "error": ErrorText {
+            text: OptionsState.file-error;
+        }
+        if OptionsState.complete && OptionsState.file-state == "loading": Loading { }
+        if OptionsState.complete && OptionsState.read-only: Muted {
+            text: "This option is read-only and can't be set.";
+        }
+        if OptionsState.complete && !OptionsState.read-only && OptionsState.file-state == "partial": Notice {
+            text: "This option is set through its sub-options (line \{OptionsState.file-line}). Edit those individually.";
+        }
+        if OptionsState.complete && !OptionsState.read-only && OptionsState.file-state == "opaque": Notice {
+            text: "This option sits inside an expression the GUI can't edit safely (line \{OptionsState.file-line}):";
+            CodeBlock {
+                text: OptionsState.file-expr;
+            }
+        }
+        if OptionsState.complete && !OptionsState.read-only && (OptionsState.file-state == "set" || OptionsState.file-state == "notSet"): Editor { }
+
+        H3 {
+            text: "Effective value";
+        }
+        Muted {
+            text: "The value after merging every module, including defaults and other files. Staged changes are only included once saved.";
+        }
+        HorizontalLayout {
+            alignment: start;
+            Button {
+                text: OptionsState.eval-busy ? "Evaluating…" : "Evaluate";
+                enabled: OptionsState.complete && !OptionsState.eval-busy;
+                clicked => {
+                    OptionsState.evaluate();
+                }
+            }
+        }
+        if OptionsState.eval-value != "": CodeBlock {
+            text: OptionsState.eval-value;
+        }
+        if OptionsState.eval-error != "": CodeBlock {
+            text: OptionsState.eval-error;
+            error: true;
+        }
+    }
+}
+
+export component OptionsPage inherits Rectangle {
+    if OptionsState.load-error != "": VerticalLayout {
+        padding: 32px;
+        spacing: 12px;
+        alignment: start;
+        H2 {
+            text: "Couldn't load home-manager options";
+        }
+        CodeBlock {
+            text: OptionsState.load-error;
+            error: true;
+        }
+        Muted {
+            text: "Check the options source in Settings, or switch to mock mode.";
+        }
+        HorizontalLayout {
+            alignment: start;
+            Button {
+                text: "Try again";
+                clicked => {
+                    OptionsState.retry();
+                }
+            }
+        }
+    }
+    if OptionsState.load-error == "" && OptionsState.loading: VerticalLayout {
+        padding: 32px;
+        alignment: center;
+        Loading {
+            alignment: center;
+            text: "Loading options… The first load in real mode builds home-manager's docs, which can take a minute.";
+        }
+    }
+    if OptionsState.load-error == "" && !OptionsState.loading: HorizontalLayout {
+        VerticalLayout {
+            width: 360px;
+            padding: 12px;
+            spacing: 8px;
+            search := LineEdit {
+                placeholder-text: "Search \{OptionsState.total} options";
+                text <=> OptionsState.query;
+                edited => {
+                    OptionsState.search-changed();
+                }
+                init => {
+                    self.focus();
+                }
+            }
+            CheckBox {
+                text: "Only options set in my file";
+                checked <=> OptionsState.only-set;
+                toggled => {
+                    OptionsState.search-changed();
+                }
+            }
+            ListView {
+                for row in OptionsState.results: ListRow {
+                    selected: row.name == OptionsState.selected;
+                    clicked => {
+                        OptionsState.select(row.name);
+                    }
+                    Mono {
+                        text: row.name;
+                        font-size: 12px;
+                        overflow: elide;
+                        horizontal-stretch: 1;
+                    }
+                    if row.set: VerticalLayout {
+                        alignment: center;
+                        Dot { }
+                    }
+                }
+            }
+            if OptionsState.results-note != "": Small {
+                text: OptionsState.results-note;
+                horizontal-alignment: center;
+            }
+        }
+        Rectangle {
+            width: 1px;
+            background: Theme.border;
+        }
+        if OptionsState.selected == "": Muted {
+            text: "Select an option to see its details and set it.";
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+        if OptionsState.selected != "": OptionDetail { }
+    }
+}

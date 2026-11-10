@@ -1,0 +1,46 @@
+[package]
+name = "hm-gui"
+version = "0.1.0"
+description = "A desktop GUI for home-manager"
+authors = ["Adham Salama"]
+edition = "2024"
+
+[dependencies]
+slint = { version = "1.18", default-features = false, features = ["std", "compat-1-2", "backend-winit", "renderer-software", "accessibility"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rnix = "0.14.0"
+similar = "3.2.0"
+anyhow = "1.0.104"
+dirs = "7.0.0"
+regex = "1.13.1"
+tokio = { version = "1.54.1", features = ["process", "io-util", "macros", "time", "fs", "rt-multi-thread"] }
+rowan = "0.16"
+open = "5"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+png = { version = "0.18", optional = true }
+
+[features]
+# Debug screenshots via HM_GUI_SNAPSHOT.
+snapshot = ["dep:png"]
+
+[build-dependencies]
+slint-build = "1.18"
+
+[dev-dependencies]
+tempfile = "3.27.0"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true
+
+[package.metadata.bundle]
+name = "Home Manager GUI"
+identifier = "dev.adham.hmgui"
+icon = ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns"]
+category = "Utility"
+short_description = "A desktop GUI for home-manager"
+deb_depends = ["libfontconfig1", "libxkbcommon0", "libxkbcommon-x11-0"]

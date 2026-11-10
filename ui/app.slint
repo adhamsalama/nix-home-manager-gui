@@ -1,0 +1,170 @@
+import { Palette } from "std-widgets.slint";
+import { Theme, Muted, Small, Badge, Link } from "common.slint";
+import { OptionsPage, OptionsState } from "options.slint";
+import { PackagesPage, PackagesState } from "packages.slint";
+import { ApplyPage, ApplyState, GenerationsPage, GenerationsState, ChannelsPage, ChannelsState, SettingsPage, SettingsState } from "pages.slint";
+
+export { Theme, OptionsState, PackagesState, ApplyState, GenerationsState, ChannelsState, SettingsState }
+
+export global Shell {
+    // 0 options, 1 packages, 2 apply, 3 generations, 4 channels, 5 settings
+    in-out property <int> page;
+    in property <bool> dirty;
+    in property <bool> mock;
+    in property <string> config-file;
+    in property <string> file-error;
+    in property <bool> hm-missing;
+}
+
+component NavItem inherits Rectangle {
+    in property <string> text;
+    in property <int> index;
+    in property <bool> pill;
+    height: 32px;
+    border-radius: 6px;
+    background: Shell.page == index ? Theme.selected : touch.has-hover ? Theme.hover : transparent;
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            Shell.page = root.index;
+        }
+    }
+    HorizontalLayout {
+        padding-left: 10px;
+        padding-right: 8px;
+        spacing: 6px;
+        Text {
+            text: root.text;
+            vertical-alignment: center;
+            font-weight: Shell.page == root.index ? 600 : 400;
+            horizontal-stretch: 1;
+        }
+        if root.pill: VerticalLayout {
+            alignment: center;
+            Badge {
+                text: "unsaved";
+                tone: "warn";
+            }
+        }
+    }
+}
+
+component Banner inherits Rectangle {
+    in property <string> text;
+    in property <bool> error;
+    background: error ? Theme.bad-bg : Theme.warn-bg;
+    HorizontalLayout {
+        padding: 10px;
+        padding-left: 16px;
+        spacing: 12px;
+        Text {
+            text: root.text;
+            color: root.error ? Theme.bad : Theme.warn;
+            wrap: word-wrap;
+            horizontal-stretch: 1;
+        }
+        @children
+    }
+}
+
+export component MainWindow inherits Window {
+    title: "Home Manager";
+    preferred-width: 1200px;
+    preferred-height: 800px;
+    min-width: 820px;
+    min-height: 520px;
+    background: Palette.background;
+    default-font-size: 13px;
+
+    HorizontalLayout {
+        Rectangle {
+            width: 200px;
+            background: Theme.sidebar;
+            VerticalLayout {
+                padding: 10px;
+                spacing: 2px;
+                Text {
+                    text: "Home Manager";
+                    font-size: 15px;
+                    font-weight: 700;
+                    height: 40px;
+                    vertical-alignment: center;
+                    x: 10px;
+                }
+                NavItem {
+                    text: "Options";
+                    index: 0;
+                }
+                NavItem {
+                    text: "Packages";
+                    index: 1;
+                }
+                NavItem {
+                    text: "Review & apply";
+                    index: 2;
+                    pill: Shell.dirty;
+                }
+                NavItem {
+                    text: "Generations";
+                    index: 3;
+                }
+                NavItem {
+                    text: "Channels";
+                    index: 4;
+                }
+                NavItem {
+                    text: "Settings";
+                    index: 5;
+                }
+                Rectangle { }
+                VerticalLayout {
+                    spacing: 6px;
+                    padding-left: 6px;
+                    HorizontalLayout {
+                        alignment: start;
+                        Badge {
+                            text: Shell.mock ? "Mock mode" : "Real mode";
+                            tone: Shell.mock ? "warn" : "ok";
+                        }
+                    }
+                    Small {
+                        text: Shell.config-file;
+                        wrap: char-wrap;
+                    }
+                }
+            }
+        }
+        Rectangle {
+            width: 1px;
+            background: Theme.border;
+        }
+        VerticalLayout {
+            if Shell.file-error != "": Banner {
+                error: true;
+                text: Shell.file-error;
+                VerticalLayout {
+                    alignment: center;
+                    horizontal-stretch: 0;
+                    Link {
+                        text: "Open settings";
+                        clicked => {
+                            Shell.page = 5;
+                        }
+                    }
+                }
+            }
+            if Shell.hm-missing: Banner {
+                text: "home-manager wasn't found on PATH. Build, switch and generations won't work.";
+            }
+            Rectangle {
+                vertical-stretch: 1;
+                if Shell.page == 0: OptionsPage { }
+                if Shell.page == 1: PackagesPage { }
+                if Shell.page == 2: ApplyPage { }
+                if Shell.page == 3: GenerationsPage { }
+                if Shell.page == 4: ChannelsPage { }
+                if Shell.page == 5: SettingsPage { }
+            }
+        }
+    }
+}

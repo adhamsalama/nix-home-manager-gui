@@ -1,6 +1,6 @@
 name: Build
 
-# Builds .deb and .rpm (Linux) and a universal .dmg (macOS).
+# Builds .deb and .rpm (Linux) and a universal .dmg (macOS) with cargo-bundle.
 # Every run uploads each package as its own workflow artifact. Pushing a `v*` tag
 # also creates a draft GitHub release with them attached.
 on:
@@ -17,38 +17,26 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # Slint's winit backend needs these to build and run on Linux.
+  LINUX_DEPS: libfontconfig1-dev libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libx11-xcb-dev
+
 jobs:
   check:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
-
       - name: Install Linux dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libxdo-dev libssl-dev \
-            libayatana-appindicator3-dev librsvg2-dev
-
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: lts/*
-          cache: pnpm
+        run: sudo apt-get update && sudo apt-get install -y $LINUX_DEPS
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy
+          components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri -> target
-
-      - run: pnpm install --frozen-lockfile
-      - name: Typecheck and build frontend
-        run: pnpm build
-      - name: Rust tests
-        working-directory: src-tauri
+      - name: Format
+        run: cargo fmt --check
+      - name: Tests
         run: cargo test --locked
       - name: Clippy
-        working-directory: src-tauri
         run: cargo clippy --locked --all-targets -- -D warnings
 
   build:
@@ -61,12 +49,8 @@ jobs:
           # requirement is low enough for most distros, Fedora included.
           - name: linux
             os: ubuntu-22.04
-            args: --bundles deb,rpm
-            bundle: src-tauri/target/release/bundle
           - name: macos
             os: macos-latest
-            args: --target universal-apple-darwin --bundles dmg
-            bundle: src-tauri/target/universal-apple-darwin/release/bundle
     name: build (${{ matrix.name }})
     runs-on: ${{ matrix.os }}
     steps:
@@ -74,59 +58,45 @@ jobs:
 
       - name: Install Linux dependencies
         if: matrix.name == 'linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libxdo-dev libssl-dev \
-            libayatana-appindicator3-dev librsvg2-dev
+        run: sudo apt-get update && sudo apt-get install -y $LINUX_DEPS rpm
 
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: lts/*
-          cache: pnpm
       - uses: dtolnay/rust-toolchain@stable
         with:
           # A universal macOS binary needs both architectures.
           targets: ${{ matrix.name == 'macos' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri -> target
           key: ${{ matrix.name }}
+      - name: Install cargo-bundle
+        run: cargo install cargo-bundle --locked --version 0.12.0
 
-      - run: pnpm install --frozen-lockfile
-
-      - name: Build packages
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          args: ${{ matrix.args }}
-          # Only tag pushes create a release; other runs just build.
-          tagName: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
-          releaseName: Home Manager GUI ${{ github.ref_name }}
-          releaseBody: See the assets below for the .deb, .rpm and .dmg packages.
-          releaseDraft: true
-
-      - name: Upload .deb
+      - name: Build .deb and .rpm
         if: matrix.name == 'linux'
-        uses: actions/upload-artifact@v4
-        with:
-          name: hm-gui-deb
-          path: ${{ matrix.bundle }}/deb/*.deb
-          if-no-files-found: error
-
-      - name: Upload .rpm
-        if: matrix.name == 'linux'
-        uses: actions/upload-artifact@v4
-        with:
-          name: hm-gui-rpm
-          path: ${{ matrix.bundle }}/rpm/*.rpm
-          if-no-files-found: error
-
-      - name: Upload .dmg
+        run: |
+          cargo bundle --release --format deb
+          cargo bundle --release --format rpm
+      - name: Build universal .dmg
         if: matrix.name == 'macos'
-        uses: actions/upload-artifact@v4
+        run: cargo bundle --release --format dmg -t aarch64-apple-darwin -t x86_64-apple-darwin
+
+      - name: Collect packages
+        run: |
+          mkdir dist
+          find target -path '*/bundle/*' \( -name '*.deb' -o -name '*.rpm' -o -name '*.dmg' \) -exec cp {} dist/ \;
+          ls -l dist
+          test -n "$(ls dist)"
+
+      - uses: actions/upload-artifact@v4
         with:
-          name: hm-gui-dmg
-          path: ${{ matrix.bundle }}/dmg/*.dmg
+          name: hm-gui-${{ matrix.name }}
+          path: dist/*
           if-no-files-found: error
+
+      - name: Attach to draft release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Home Manager GUI ${{ github.ref_name }}
+          body: See the assets below for the .deb, .rpm and .dmg packages.
+          draft: true
+          files: dist/*

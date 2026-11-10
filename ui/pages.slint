@@ -1,0 +1,676 @@
+// The smaller pages: Review & apply, Generations, Channels and Settings.
+
+import { Button, CheckBox, ComboBox, LineEdit, ListView, ScrollView } from "std-widgets.slint";
+import { Theme, Muted, Small, H2, H3, Mono, ErrorText, Badge, Notice, CodeBlock, Link, Loading, Divider, RunLog, RunInfo, LogRow } from "common.slint";
+
+export struct DiffRow {
+    kind: string,
+    old: string,
+    new: string,
+    text: string,
+}
+
+export global ApplyState {
+    in property <bool> loaded;
+    in property <string> path;
+    in property <bool> dirty;
+    in property <[DiffRow]> diff;
+    in property <string> error;
+    in property <RunInfo> run;
+    in property <[LogRow]> log;
+    callback save();
+    callback discard();
+    callback start(string);
+}
+
+/// A scrolling page column with the usual padding.
+component Page inherits ScrollView {
+    in property <length> max-content-width: 900px;
+    VerticalLayout {
+        width: root.visible-width;
+        padding: 24px;
+        spacing: 12px;
+        alignment: start;
+        @children
+    }
+}
+
+export component ApplyPage inherits Page {
+    H2 {
+        text: "Review & apply";
+    }
+    if ApplyState.loaded: Muted {
+        text: ApplyState.path;
+    }
+    if ApplyState.error != "": CodeBlock {
+        text: ApplyState.error;
+        error: true;
+    }
+    if ApplyState.loaded && !ApplyState.dirty: Notice {
+        text: "No unsaved changes. The file matches what's on disk.";
+    }
+    if ApplyState.dirty: Rectangle {
+        height: min(ApplyState.diff.length * 18px + 16px, 420px);
+        border-radius: 6px;
+        border-width: 1px;
+        border-color: Theme.border;
+        clip: true;
+        ListView {
+            for l in ApplyState.diff: Rectangle {
+                height: 18px;
+                background: l.kind == "add" ? Theme.add-bg : l.kind == "del" ? Theme.del-bg : transparent;
+                HorizontalLayout {
+                    padding-left: 8px;
+                    spacing: 8px;
+                    Mono {
+                        width: 32px;
+                        text: l.old;
+                        color: Theme.muted;
+                        font-size: 12px;
+                        horizontal-alignment: right;
+                    }
+                    Mono {
+                        width: 32px;
+                        text: l.new;
+                        color: Theme.muted;
+                        font-size: 12px;
+                        horizontal-alignment: right;
+                    }
+                    Mono {
+                        width: 12px;
+                        text: l.kind == "add" ? "+" : l.kind == "del" ? "-" : " ";
+                        font-size: 12px;
+                    }
+                    Mono {
+                        text: l.text;
+                        font-size: 12px;
+                        color: l.kind == "hunk" ? Theme.hunk : Theme.fg;
+                    }
+                }
+            }
+        }
+    }
+    if ApplyState.dirty: HorizontalLayout {
+        spacing: 8px;
+        alignment: start;
+        Button {
+            primary: true;
+            text: "Save to file";
+            clicked => {
+                ApplyState.save();
+            }
+        }
+        Button {
+            text: "Discard changes";
+            clicked => {
+                ApplyState.discard();
+            }
+        }
+    }
+    if ApplyState.dirty: Small {
+        text: "Saving keeps a copy of the previous file next to it as .nix.bak.";
+    }
+
+    H3 {
+        text: "Apply with home-manager";
+    }
+    Muted {
+        text: "Build checks that the configuration evaluates and builds without changing anything. Switch builds it and activates it as a new generation.";
+    }
+    HorizontalLayout {
+        spacing: 8px;
+        alignment: start;
+        Button {
+            text: "Build";
+            enabled: !ApplyState.run.running && !ApplyState.dirty;
+            clicked => {
+                ApplyState.start("build");
+            }
+        }
+        Button {
+            primary: true;
+            text: "Switch";
+            enabled: !ApplyState.run.running && !ApplyState.dirty;
+            clicked => {
+                ApplyState.start("switch");
+            }
+        }
+        if ApplyState.dirty: Small {
+            text: "Save your changes first.";
+            vertical-alignment: center;
+        }
+    }
+    RunLog {
+        info: ApplyState.run;
+        lines: ApplyState.log;
+    }
+}
+
+export struct GenRow {
+    id: int,
+    date: string,
+    path: string,
+    current: bool,
+}
+
+export global GenerationsState {
+    in property <bool> loading: true;
+    in property <string> error;
+    in property <[GenRow]> rows;
+    in-out property <int> confirming: -1;
+    in property <RunInfo> run;
+    in property <[LogRow]> log;
+    callback activate(int);
+}
+
+export component GenerationsPage inherits Page {
+    H2 {
+        text: "Generations";
+    }
+    Muted {
+        text: "Every switch creates a generation. Activating an older one rolls your environment back to it; your config file isn't changed.";
+    }
+    if GenerationsState.error != "": CodeBlock {
+        text: GenerationsState.error;
+        error: true;
+    }
+    if GenerationsState.loading && GenerationsState.error == "": Loading { }
+    for g in GenerationsState.rows: VerticalLayout {
+        spacing: 6px;
+        HorizontalLayout {
+            spacing: 16px;
+            padding-top: 4px;
+            padding-bottom: 4px;
+            Text {
+                width: 40px;
+                text: g.id;
+                font-weight: g.current ? 700 : 400;
+                vertical-alignment: center;
+            }
+            Text {
+                width: 150px;
+                text: g.date;
+                vertical-alignment: center;
+            }
+            Mono {
+                text: g.path;
+                font-size: 12px;
+                color: Theme.muted;
+                overflow: elide;
+                horizontal-stretch: 1;
+                vertical-alignment: center;
+            }
+            HorizontalLayout {
+                horizontal-stretch: 0;
+                spacing: 6px;
+                alignment: end;
+                if g.current: VerticalLayout {
+                    alignment: center;
+                    Badge {
+                        text: "Current";
+                        tone: "ok";
+                    }
+                }
+                if !g.current && GenerationsState.confirming == g.id: Button {
+                    primary: true;
+                    text: "Activate \{g.id}";
+                    clicked => {
+                        GenerationsState.confirming = -1;
+                        GenerationsState.activate(g.id);
+                    }
+                }
+                if !g.current && GenerationsState.confirming == g.id: Button {
+                    text: "Cancel";
+                    clicked => {
+                        GenerationsState.confirming = -1;
+                    }
+                }
+                if !g.current && GenerationsState.confirming != g.id: Button {
+                    text: "Roll back to this";
+                    enabled: !GenerationsState.run.running;
+                    clicked => {
+                        GenerationsState.confirming = g.id;
+                    }
+                }
+            }
+        }
+        Divider { }
+    }
+    RunLog {
+        info: GenerationsState.run;
+        lines: GenerationsState.log;
+    }
+}
+
+export struct ChannelRow {
+    name: string,
+    url: string,
+    version: string,
+    revision: string,
+}
+
+export global ChannelsState {
+    in property <bool> loading: true;
+    in property <bool> uses-flake;
+    in property <[string]> warnings;
+    in property <string> error;
+    in property <string> message;
+    in property <[ChannelRow]> user;
+    in property <[ChannelRow]> system;
+    in property <string> user-updated;
+    in property <string> system-updated;
+    in-out property <string> editing;
+    in-out property <string> edit-url;
+    in-out property <string> confirming;
+    in-out property <string> new-name;
+    in-out property <string> new-url;
+    in property <[string]> suggestions;
+    in property <RunInfo> run;
+    in property <[LogRow]> log;
+    in property <bool> update-ok;
+    callback update(string);
+    callback save-url(string, string);
+    callback remove(string);
+    callback rollback();
+    callback add(string, string);
+    callback go-apply();
+}
+
+component UrlSuggestions inherits ComboBox {
+    callback picked(string);
+    model: ChannelsState.suggestions;
+    current-index: -1;
+    width: 40px;
+    selected(v) => {
+        root.picked(v);
+    }
+}
+
+component Version inherits VerticalLayout {
+    in property <ChannelRow> channel;
+    alignment: center;
+    if channel.version == "": Muted {
+        text: "Not downloaded yet";
+    }
+    if channel.version != "": Mono {
+        text: root.channel.version;
+        font-size: 12px;
+    }
+    if channel.revision != "": Small {
+        text: "rev " + root.channel.revision;
+    }
+}
+
+export component ChannelsPage inherits Page {
+    H2 {
+        text: "Channels";
+    }
+    Muted {
+        text: "In a classic setup, <nixpkgs> and <home-manager> come from your channels. Updating a channel moves every package to that channel's latest versions; nothing changes until you build and switch.";
+    }
+    if ChannelsState.uses-flake: Notice {
+        text: "Your settings use a flake, so channels don't affect your builds. Flake inputs are pinned in flake.lock instead.";
+    }
+    for w in ChannelsState.warnings: Notice {
+        tone: "warn";
+        text: w;
+    }
+    if ChannelsState.error != "": CodeBlock {
+        text: ChannelsState.error;
+        error: true;
+    }
+    if ChannelsState.message != "": Notice {
+        text: ChannelsState.message;
+    }
+    if ChannelsState.loading && ChannelsState.error == "": Loading { }
+
+    if !ChannelsState.loading: VerticalLayout {
+        spacing: 12px;
+        HorizontalLayout {
+            spacing: 12px;
+            alignment: start;
+            H3 {
+                text: "Your channels";
+                horizontal-stretch: 0;
+            }
+            Small {
+                text: "Last updated " + ChannelsState.user-updated;
+                vertical-alignment: center;
+            }
+        }
+        if ChannelsState.user.length == 0: Muted {
+            text: "No channels yet. Add nixpkgs and home-manager below.";
+        }
+        for c in ChannelsState.user: VerticalLayout {
+            spacing: 6px;
+            HorizontalLayout {
+                spacing: 12px;
+                padding-top: 4px;
+                padding-bottom: 4px;
+                Mono {
+                    width: 130px;
+                    text: c.name;
+                    font-weight: 600;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
+                if ChannelsState.editing == c.name: HorizontalLayout {
+                    spacing: 6px;
+                    url := LineEdit {
+                        text <=> ChannelsState.edit-url;
+                        accepted => {
+                            ChannelsState.save-url(c.name, ChannelsState.edit-url);
+                        }
+                        init => {
+                            self.focus();
+                        }
+                    }
+                    UrlSuggestions {
+                        picked(v) => {
+                            ChannelsState.edit-url = v;
+                        }
+                    }
+                    Button {
+                        primary: true;
+                        text: "Save";
+                        clicked => {
+                            ChannelsState.save-url(c.name, ChannelsState.edit-url);
+                        }
+                    }
+                    Button {
+                        text: "Cancel";
+                        clicked => {
+                            ChannelsState.editing = "";
+                        }
+                    }
+                }
+                if ChannelsState.editing != c.name: Mono {
+                    text: c.url != "" ? c.url : "—";
+                    font-size: 12px;
+                    color: Theme.muted;
+                    overflow: elide;
+                    horizontal-stretch: 1;
+                    vertical-alignment: center;
+                }
+                if ChannelsState.editing != c.name: Version {
+                    width: 170px;
+                    channel: c;
+                }
+                if ChannelsState.editing != c.name && ChannelsState.confirming == c.name: HorizontalLayout {
+                    spacing: 6px;
+                    horizontal-stretch: 0;
+                    Button {
+                        text: "Remove " + c.name;
+                        clicked => {
+                            ChannelsState.confirming = "";
+                            ChannelsState.remove(c.name);
+                        }
+                    }
+                    Button {
+                        text: "Cancel";
+                        clicked => {
+                            ChannelsState.confirming = "";
+                        }
+                    }
+                }
+                if ChannelsState.editing != c.name && ChannelsState.confirming != c.name: HorizontalLayout {
+                    spacing: 6px;
+                    horizontal-stretch: 0;
+                    Button {
+                        text: "Update";
+                        enabled: !ChannelsState.run.running;
+                        clicked => {
+                            ChannelsState.update(c.name);
+                        }
+                    }
+                    Button {
+                        text: "Change URL";
+                        clicked => {
+                            ChannelsState.edit-url = c.url;
+                            ChannelsState.editing = c.name;
+                        }
+                    }
+                    Button {
+                        text: "×";
+                        clicked => {
+                            ChannelsState.confirming = c.name;
+                        }
+                    }
+                }
+            }
+            Divider { }
+        }
+        HorizontalLayout {
+            spacing: 8px;
+            alignment: start;
+            Button {
+                primary: true;
+                text: "Update all channels";
+                enabled: !ChannelsState.run.running && ChannelsState.user.length > 0;
+                clicked => {
+                    ChannelsState.update("");
+                }
+            }
+            if ChannelsState.confirming == "@rollback": Button {
+                text: "Restore previous channels";
+                clicked => {
+                    ChannelsState.confirming = "";
+                    ChannelsState.rollback();
+                }
+            }
+            if ChannelsState.confirming == "@rollback": Button {
+                text: "Cancel";
+                clicked => {
+                    ChannelsState.confirming = "";
+                }
+            }
+            if ChannelsState.confirming != "@rollback": Button {
+                text: "Undo last update…";
+                enabled: !ChannelsState.run.running;
+                clicked => {
+                    ChannelsState.confirming = "@rollback";
+                }
+            }
+        }
+
+        H3 {
+            text: "Add a channel";
+        }
+        HorizontalLayout {
+            spacing: 6px;
+            LineEdit {
+                width: 180px;
+                placeholder-text: "name, e.g. nixpkgs";
+                text <=> ChannelsState.new-name;
+            }
+            LineEdit {
+                placeholder-text: "https://nixos.org/channels/nixpkgs-unstable";
+                text <=> ChannelsState.new-url;
+            }
+            UrlSuggestions {
+                picked(v) => {
+                    ChannelsState.new-url = v;
+                }
+            }
+            Button {
+                text: "Add";
+                enabled: ChannelsState.new-name != "" && ChannelsState.new-url != "";
+                clicked => {
+                    ChannelsState.add(ChannelsState.new-name, ChannelsState.new-url);
+                }
+            }
+        }
+        Small {
+            text: "Adding a channel with an existing name replaces its URL. Use the same release for nixpkgs and home-manager, e.g. nixpkgs-unstable with master. The ▾ menu suggests common URLs.";
+        }
+
+        RunLog {
+            info: ChannelsState.run;
+            lines: ChannelsState.log;
+        }
+        if ChannelsState.update-ok: Notice {
+            text: "Channels updated. Build to see whether your configuration still works, then switch to apply the new versions.";
+            HorizontalLayout {
+                alignment: start;
+                Link {
+                    text: "Go to Review & apply";
+                    clicked => {
+                        ChannelsState.go-apply();
+                    }
+                }
+            }
+        }
+
+        if ChannelsState.system.length > 0: VerticalLayout {
+            spacing: 12px;
+            HorizontalLayout {
+                spacing: 12px;
+                alignment: start;
+                H3 {
+                    text: "System channels (root)";
+                    horizontal-stretch: 0;
+                }
+                Small {
+                    text: "Last updated " + ChannelsState.system-updated;
+                    vertical-alignment: center;
+                }
+            }
+            Muted {
+                text: "These belong to root and are used when you don't have a channel with the same name. To update them, run sudo nix-channel --update in a terminal.";
+            }
+            for c in ChannelsState.system: HorizontalLayout {
+                spacing: 12px;
+                Mono {
+                    width: 130px;
+                    text: c.name;
+                    font-weight: 600;
+                }
+                Version {
+                    channel: c;
+                }
+            }
+        }
+    }
+}
+
+export global SettingsState {
+    in-out property <string> mode;
+    in-out property <string> config-file;
+    in-out property <string> flake-ref;
+    in-out property <string> options-json;
+    in-out property <string> hm-flake;
+    in property <bool> nix-available: true;
+    in property <string> message;
+    in property <bool> message-ok;
+    callback set-mode(string);
+    callback save();
+}
+
+component Field inherits VerticalLayout {
+    in property <string> label;
+    in property <string> hint;
+    in-out property <string> value;
+    in property <string> placeholder;
+    in property <bool> enabled: true;
+    spacing: 4px;
+    Text {
+        text: root.label;
+        font-weight: 600;
+        color: root.enabled ? Theme.fg : Theme.muted;
+    }
+    LineEdit {
+        enabled: root.enabled;
+        text <=> root.value;
+        placeholder-text: root.placeholder;
+    }
+    if root.hint != "": Small {
+        text: root.hint;
+    }
+}
+
+component Group inherits Rectangle {
+    in property <string> title;
+    border-radius: 8px;
+    border-width: 1px;
+    border-color: Theme.border;
+    VerticalLayout {
+        padding: 16px;
+        spacing: 12px;
+        H3 {
+            text: root.title;
+        }
+        @children
+    }
+}
+
+export component SettingsPage inherits Page {
+    H2 {
+        text: "Settings";
+    }
+    Group {
+        title: "Backend";
+        CheckBox {
+            text: SettingsState.nix-available ? "Real: use the installed nix and home-manager" : "Real: use the installed nix and home-manager (nix wasn't found)";
+            checked: SettingsState.mode == "real";
+            toggled => {
+                SettingsState.set-mode(self.checked ? "real" : "mock");
+            }
+        }
+        CheckBox {
+            text: "Mock: sample data and simulated commands. Edits still go to a real sample file.";
+            checked: SettingsState.mode == "mock";
+            toggled => {
+                SettingsState.set-mode(self.checked ? "mock" : "real");
+            }
+        }
+    }
+    Group {
+        title: "Configuration";
+        Field {
+            label: "Nix file to edit";
+            value <=> SettingsState.config-file;
+            hint: "Usually your home.nix. Options set in other imported files are read-only here.";
+        }
+        Field {
+            label: "Flake output (optional)";
+            placeholder: "~/.config/home-manager#yourname";
+            value <=> SettingsState.flake-ref;
+            hint: "Leave empty for a classic setup (home-manager -f file). For flakes, this is passed to --flake and used to evaluate homeConfigurations.<name>.";
+        }
+    }
+    Group {
+        title: "Option documentation";
+        Small {
+            text: "Options are read from the home-manager you have installed: your home-manager channel in a classic setup, or the home-manager input of your flake. The flake below is only a fallback.";
+        }
+        Field {
+            enabled: SettingsState.mode == "real";
+            label: "Fallback home-manager flake";
+            value <=> SettingsState.hm-flake;
+            hint: "Pin it to your release, e.g. github:nix-community/home-manager/release-25.05.";
+        }
+        Field {
+            enabled: SettingsState.mode == "real";
+            label: "options.json path (optional)";
+            value <=> SettingsState.options-json;
+            hint: "Overrides everything above.";
+        }
+    }
+    HorizontalLayout {
+        spacing: 12px;
+        alignment: start;
+        Button {
+            primary: true;
+            text: "Save settings";
+            clicked => {
+                SettingsState.save();
+            }
+        }
+        if SettingsState.message != "": Text {
+            text: SettingsState.message;
+            color: SettingsState.message-ok ? Theme.muted : Theme.bad;
+            vertical-alignment: center;
+            wrap: word-wrap;
+        }
+    }
+}

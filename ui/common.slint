@@ -1,0 +1,229 @@
+import { Palette, ListView, Spinner } from "std-widgets.slint";
+
+export global Theme {
+    out property <bool> dark: Palette.color-scheme == ColorScheme.dark;
+    out property <brush> fg: Palette.foreground;
+    out property <color> muted: dark ? #9ca3af : #6b7280;
+    out property <color> ok: dark ? #4ade80 : #15803d;
+    out property <color> ok-bg: dark ? #14532d : #dcfce7;
+    out property <color> warn: dark ? #fbbf24 : #92400e;
+    out property <color> warn-bg: dark ? #422006 : #fef3c7;
+    out property <color> bad: dark ? #f87171 : #b91c1c;
+    out property <color> bad-bg: dark ? #450a0a : #fee2e2;
+    out property <color> info-bg: dark ? #172554 : #e8f0fe;
+    out property <color> code-bg: dark ? #ffffff12 : #0000000b;
+    out property <color> border: dark ? #ffffff24 : #00000021;
+    out property <color> sidebar: dark ? #00000040 : #0000000a;
+    out property <color> selected: dark ? #3b82f640 : #3b82f626;
+    out property <color> hover: dark ? #ffffff10 : #0000000a;
+    out property <color> link: dark ? #60a5fa : #1d4ed8;
+    out property <color> add-bg: dark ? #14532d80 : #dcfce7;
+    out property <color> del-bg: dark ? #7f1d1d80 : #fee2e2;
+    out property <color> hunk: dark ? #93c5fd : #1e40af;
+    // Set from Rust per platform.
+    in-out property <string> mono: "monospace";
+    out property <length> small: 11px;
+}
+
+export struct LogRow {
+    text: string,
+    stream: string,
+}
+
+export struct RunInfo {
+    visible: bool,
+    title: string,
+    running: bool,
+    ok: bool,
+    status: string,
+}
+
+export component Muted inherits Text {
+    color: Theme.muted;
+    wrap: word-wrap;
+}
+
+export component Small inherits Text {
+    color: Theme.muted;
+    font-size: Theme.small;
+    wrap: word-wrap;
+}
+
+export component H2 inherits Text {
+    font-size: 20px;
+    font-weight: 600;
+    wrap: word-wrap;
+}
+
+export component H3 inherits Text {
+    font-size: 15px;
+    font-weight: 600;
+}
+
+export component Mono inherits Text {
+    font-family: Theme.mono;
+}
+
+export component ErrorText inherits Text {
+    color: Theme.bad;
+    wrap: word-wrap;
+}
+
+export component Badge inherits Rectangle {
+    in property <string> text;
+    // "ok", "warn", "bad", "running" or "neutral"
+    in property <string> tone: "neutral";
+    border-radius: 9px;
+    background: tone == "ok" ? Theme.ok-bg : tone == "warn" ? Theme.warn-bg : tone == "bad" ? Theme.bad-bg : tone == "running" ? Theme.info-bg : Theme.code-bg;
+    horizontal-stretch: 0;
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-right: 8px;
+        padding-top: 2px;
+        padding-bottom: 2px;
+        Text {
+            text: root.text;
+            font-size: Theme.small;
+            font-weight: 600;
+            color: root.tone == "ok" ? Theme.ok : root.tone == "warn" ? Theme.warn : root.tone == "bad" ? Theme.bad : Theme.fg;
+        }
+    }
+}
+
+/// A tinted box for notes and warnings, with optional content below the text.
+export component Notice inherits Rectangle {
+    in property <string> text;
+    // "info", "warn" or "bad"
+    in property <string> tone: "info";
+    border-radius: 6px;
+    background: tone == "warn" ? Theme.warn-bg : tone == "bad" ? Theme.bad-bg : Theme.info-bg;
+    VerticalLayout {
+        padding: 10px;
+        spacing: 8px;
+        if root.text != "": Text {
+            text: root.text;
+            wrap: word-wrap;
+            color: root.tone == "bad" ? Theme.bad : Theme.fg;
+        }
+        @children
+    }
+}
+
+/// Preformatted text such as Nix expressions and command errors.
+export component CodeBlock inherits Rectangle {
+    in property <string> text;
+    in property <bool> error;
+    border-radius: 6px;
+    background: error ? Theme.bad-bg : Theme.code-bg;
+    VerticalLayout {
+        padding: 8px;
+        Text {
+            text: root.text;
+            font-family: Theme.mono;
+            font-size: 12px;
+            wrap: word-wrap;
+            color: root.error ? Theme.bad : Theme.fg;
+        }
+    }
+}
+
+export component Link inherits Text {
+    callback clicked();
+    in property <bool> enabled: true;
+    color: enabled ? Theme.link : Theme.muted;
+    TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+/// A full-width clickable row for lists, highlighted when selected.
+export component ListRow inherits Rectangle {
+    in property <bool> selected;
+    callback clicked();
+    background: selected ? Theme.selected : touch.has-hover ? Theme.hover : transparent;
+    border-radius: 4px;
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            root.clicked();
+        }
+    }
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-right: 8px;
+        padding-top: 4px;
+        padding-bottom: 4px;
+        spacing: 6px;
+        @children
+    }
+}
+
+export component Dot inherits Rectangle {
+    width: 7px;
+    height: 7px;
+    border-radius: 3.5px;
+    background: Theme.ok;
+}
+
+export component Divider inherits Rectangle {
+    height: 1px;
+    background: Theme.border;
+}
+
+export component Loading inherits HorizontalLayout {
+    in property <string> text;
+    spacing: 10px;
+    alignment: start;
+    Spinner {
+        indeterminate: true;
+        width: 18px;
+        height: 18px;
+    }
+    Muted {
+        text: root.text;
+        vertical-alignment: center;
+    }
+}
+
+/// Streaming output of a command, newest line kept in view.
+export component RunLog inherits VerticalLayout {
+    in property <RunInfo> info;
+    in property <[LogRow]> lines;
+    spacing: 6px;
+    if info.visible: HorizontalLayout {
+        spacing: 8px;
+        Mono {
+            text: root.info.title;
+            font-weight: 600;
+            vertical-alignment: center;
+        }
+        Badge {
+            text: root.info.running ? "Running…" : root.info.status;
+            tone: root.info.running ? "running" : root.info.ok ? "ok" : "bad";
+        }
+        Rectangle { }
+    }
+    if info.visible: Rectangle {
+        height: 260px;
+        border-radius: 6px;
+        background: Theme.code-bg;
+        list := ListView {
+            for line in root.lines: Text {
+                x: 8px;
+                text: line.text;
+                font-family: Theme.mono;
+                font-size: 12px;
+                color: line.stream == "stderr" ? Theme.warn : line.stream == "info" ? Theme.muted : Theme.fg;
+            }
+        }
+        // Follow the output while it streams.
+        property <int> count: root.lines.length;
+        changed count => {
+            list.content-y = min(0px, list.visible-height - list.content-height - 20px);
+        }
+    }
+}
