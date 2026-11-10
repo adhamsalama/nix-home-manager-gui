@@ -11,7 +11,7 @@ use crate::nix::{self, Generation, PackageDetails, SearchResults};
 use crate::nix_edit::{self, FileValue, Packages};
 use crate::options::HmOption;
 use crate::runner::{self, RunLock, Sink};
-use crate::settings::{Mode, Settings};
+use crate::settings::{Mode, PackageSearch, Settings};
 use crate::workspace::{DiffLine, WorkingCopy};
 
 pub struct AppState {
@@ -238,11 +238,25 @@ impl AppState {
         if query.starts_with('-') {
             return Err("search terms can't start with '-'".into());
         }
-        match self.settings().mode {
+        let settings = self.settings();
+        // search.nixos.org needs no local nix, so it works in mock mode too.
+        if settings.package_search == PackageSearch::NixosOrg {
+            return crate::nixos_search::search(&settings.nixos_search_channel, &query)
+                .await
+                .map_err(err);
+        }
+        match settings.mode {
             Mode::Mock => mock::search_packages(&query),
-            Mode::Real => nix::search_packages(&self.settings(), &query).await,
+            Mode::Real => nix::search_packages(&settings, &query).await,
         }
         .map_err(err)
+    }
+
+    /// Switches the Packages page between `nix search` and search.nixos.org.
+    pub fn set_package_search(&self, source: PackageSearch) -> CmdResult<()> {
+        let mut settings = self.settings();
+        settings.package_search = source;
+        self.save_settings(settings)
     }
 
     /// Version, description and license of a package in the user's nixpkgs.

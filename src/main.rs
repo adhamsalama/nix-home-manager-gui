@@ -8,6 +8,7 @@ mod editor;
 mod mock;
 mod nix;
 mod nix_edit;
+mod nixos_search;
 mod options;
 mod runner;
 mod search;

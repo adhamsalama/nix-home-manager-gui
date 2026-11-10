@@ -12,6 +12,17 @@ pub enum Mode {
     Real,
 }
 
+/// Where the Packages page searches.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PackageSearch {
+    /// `nix search` on the nixpkgs the user's config builds against.
+    #[default]
+    Nixpkgs,
+    /// search.nixos.org: instant, but may list packages the user's nixpkgs lacks.
+    NixosOrg,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Settings {
@@ -25,6 +36,15 @@ pub struct Settings {
     /// from `home_manager_flake`.
     pub options_json: String,
     pub home_manager_flake: String,
+    #[serde(default)]
+    pub package_search: PackageSearch,
+    /// The search.nixos.org channel, e.g. `unstable` or `25.11`.
+    #[serde(default = "default_nixos_search_channel")]
+    pub nixos_search_channel: String,
+}
+
+fn default_nixos_search_channel() -> String {
+    "unstable".into()
 }
 
 impl Settings {
@@ -40,6 +60,8 @@ impl Settings {
             flake_ref: String::new(),
             options_json: String::new(),
             home_manager_flake: "github:nix-community/home-manager".into(),
+            package_search: PackageSearch::default(),
+            nixos_search_channel: default_nixos_search_channel(),
         }
     }
 

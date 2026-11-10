@@ -1,4 +1,4 @@
-import { Button, LineEdit, ListView, ScrollView } from "std-widgets.slint";
+import { Button, ComboBox, LineEdit, ListView, ScrollView } from "std-widgets.slint";
 import { Theme, Muted, Small, H2, H3, Mono, ErrorText, Badge, Notice, CodeBlock, Link, ListRow, Dot, Loading, Divider } from "common.slint";
 
 export struct PkgRow {
@@ -30,6 +30,8 @@ export global PackagesState {
     in property <bool> d-installed;
 
     in-out property <string> query;
+    // 0: nix search on the user's nixpkgs, 1: search.nixos.org
+    in-out property <int> source;
     in property <bool> searching;
     in property <string> error;
     in property <string> summary;
@@ -58,6 +60,7 @@ export global PackagesState {
     callback select(string);
     callback back();
     callback search();
+    callback set-source(int);
     callback add(string);
     callback add-anyway(string);
     callback cancel-warning();
@@ -77,8 +80,16 @@ component SearchView inherits ScrollView {
         }
         HorizontalLayout {
             spacing: 8px;
+            ComboBox {
+                width: 170px;
+                model: ["Your nixpkgs", "search.nixos.org"];
+                current-index <=> PackagesState.source;
+                selected => {
+                    PackagesState.set-source(self.current-index);
+                }
+            }
             LineEdit {
-                placeholder-text: "Search nixpkgs, e.g. ripgrep";
+                placeholder-text: "Search packages, e.g. ripgrep";
                 text <=> PackagesState.query;
                 accepted => {
                     if !PackagesState.searching && PackagesState.query.character-count >= 2 {
@@ -96,7 +107,10 @@ component SearchView inherits ScrollView {
             }
         }
         if PackagesState.searching: Loading {
-            text: "Searching nixpkgs. The first search can take a while.";
+            text: PackagesState.source == 1 ? "Searching search.nixos.org…" : "Searching your nixpkgs. The first search can take a while.";
+        }
+        if PackagesState.source == 1 && !PackagesState.searching: Small {
+            text: "search.nixos.org is instant but may list packages your own nixpkgs doesn't have. Adding a package still checks it against your nixpkgs.";
         }
         if PackagesState.error != "": ErrorText {
             text: PackagesState.error;
@@ -106,9 +120,6 @@ component SearchView inherits ScrollView {
         }
         if PackagesState.no-results: Notice {
             text: "No packages found.";
-            Small {
-                text: "If you expected results, nixpkgs may have failed to evaluate: nix search hides those errors. To see the real error, run nix eval nixpkgs#hello.name --no-eval-cache in a terminal.";
-            }
         }
         for p in PackagesState.results: VerticalLayout {
             spacing: 6px;

@@ -17,7 +17,7 @@ use crate::nix::{PackageDetails, PackageInfo};
 use crate::nix_edit::FileValue;
 use crate::options::HmOption;
 use crate::runner::{RunEvent, Sink};
-use crate::settings::{Mode, Settings};
+use crate::settings::{Mode, PackageSearch, Settings};
 use crate::{
     ApplyState, ChannelRow, ChannelsState, DiffRow, GenRow, GenerationsState, LogRow, MainWindow,
     MapEntry, OptionRow, OptionsState, PackagesState, PkgRow, Placeholder, PlatformRow, RelatedRow,
@@ -276,6 +276,22 @@ impl App {
             .select_package(Some(attr.to_string())));
         on!(PackagesState, on_back, |app| app.select_package(None));
         on!(PackagesState, on_search, |app| app.search_packages());
+        on!(PackagesState, on_set_source, |app, index| {
+            let source = if index == 1 {
+                PackageSearch::NixosOrg
+            } else {
+                PackageSearch::Nixpkgs
+            };
+            let ui = app.win.global::<PackagesState>();
+            if let Err(e) = app.be.set_package_search(source) {
+                ui.set_error(s(e));
+            }
+            // Results from the other source would be misleading now.
+            app.pkgs.borrow_mut().results.clear();
+            ui.set_summary(s(""));
+            ui.set_no_results(false);
+            app.update_package_rows();
+        });
         on!(PackagesState, on_add, |app, attr| app
             .add_package(attr.to_string()));
         on!(PackagesState, on_add_anyway, |app, attr| {
@@ -1213,6 +1229,10 @@ impl App {
         ui.set_flake_ref(s(&st.flake_ref));
         ui.set_options_json(s(&st.options_json));
         ui.set_hm_flake(s(&st.home_manager_flake));
+        ui.set_nixos_channel(s(&st.nixos_search_channel));
+        self.win
+            .global::<PackagesState>()
+            .set_source(i32::from(st.package_search == PackageSearch::NixosOrg));
     }
 
     fn save_settings(self: &Rc<Self>) {
@@ -1226,6 +1246,8 @@ impl App {
             config_file: ui.get_config_file().trim().to_string(),
             flake_ref: ui.get_flake_ref().trim().to_string(),
             options_json: ui.get_options_json().trim().to_string(),
+            package_search: self.be.get_settings().package_search,
+            nixos_search_channel: ui.get_nixos_channel().trim().to_string(),
             home_manager_flake: ui.get_hm_flake().trim().to_string(),
         };
         match self.be.save_settings(settings) {

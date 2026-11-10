@@ -293,15 +293,33 @@ pub async fn search_packages(settings: &Settings, query: &str) -> Result<SearchR
         args.extend([query.to_string(), "--json".into()]);
         match search_with_retry(args).await {
             Ok(out) => {
+                let packages = parse_search(&out)?;
+                if packages.is_empty() {
+                    check_nixpkgs_evaluates(source, &nixpkgs).await?;
+                }
                 return Ok(SearchResults {
                     source: source.to_string(),
-                    packages: parse_search(&out)?,
+                    packages,
                 });
             }
             Err(e) => errors.push(format!("Searching {source}: {e:#}")),
         }
     }
     bail!("{}", errors.join("\n\n"))
+}
+
+/// `nix search` skips packages that fail to evaluate without saying why, so a
+/// nixpkgs that's broken as a whole looks like one with no matches. Evaluating
+/// a package everyone has tells the two apart and surfaces the real error.
+async fn check_nixpkgs_evaluates(source: &str, nixpkgs: &Nixpkgs) -> Result<()> {
+    let mut args = nixpkgs_args("eval", nixpkgs, "hello.name");
+    args.push("--no-eval-cache".into());
+    capture("nix", &args).await.map(|_| ()).map_err(|e| {
+        anyhow::anyhow!(
+            "Searching {source} found nothing because its nixpkgs doesn't evaluate. \
+             Evaluating hello.name failed:\n\n{e:#}"
+        )
+    })
 }
 
 async fn search_with_retry(mut args: Vec<String>) -> Result<String> {
@@ -516,6 +534,8 @@ mod tests {
             flake_ref: String::new(),
             options_json: String::new(),
             home_manager_flake: String::new(),
+            package_search: Default::default(),
+            nixos_search_channel: "unstable".into(),
         };
         let classic = nixpkgs_sources(&s);
         assert_eq!(classic[0].1, Nixpkgs::Channel);
@@ -586,6 +606,8 @@ mod tests {
             flake_ref: String::new(),
             options_json: String::new(),
             home_manager_flake: String::new(),
+            package_search: Default::default(),
+            nixos_search_channel: "unstable".into(),
         };
         assert_eq!(
             home_manager_args(&s, "build"),
