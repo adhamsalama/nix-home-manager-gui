@@ -1,6 +1,7 @@
 name: Build
 
-# Builds .deb and .rpm (Linux) and a universal .dmg (macOS) with cargo-bundle.
+# Builds .deb (cargo-bundle), .rpm (cargo-generate-rpm) and a universal .dmg
+# (cargo-bundle).
 # Every run uploads each package as its own workflow artifact. Pushing a `v*` tag
 # also creates a draft GitHub release with them attached.
 on:
@@ -67,14 +68,19 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.name }}
-      - name: Install cargo-bundle
-        run: cargo install cargo-bundle --locked --version 0.12.0
+      - name: Install packaging tools
+        run: |
+          cargo install cargo-bundle --locked --version 0.12.0
+          if [ "${{ matrix.name }}" = linux ]; then
+            cargo install cargo-generate-rpm --locked --version 0.21.1
+          fi
 
       - name: Build .deb and .rpm
         if: matrix.name == 'linux'
         run: |
           cargo bundle --release --format deb
-          cargo bundle --release --format rpm
+          # cargo-bundle can't build RPMs yet; this packages the binary built above.
+          cargo generate-rpm
       - name: Build universal .dmg
         if: matrix.name == 'macos'
         run: cargo bundle --release --format dmg -t aarch64-apple-darwin -t x86_64-apple-darwin
@@ -82,7 +88,7 @@ jobs:
       - name: Collect packages
         run: |
           mkdir dist
-          find target -path '*/bundle/*' \( -name '*.deb' -o -name '*.rpm' -o -name '*.dmg' \) -exec cp {} dist/ \;
+          find target \( -path '*/bundle/*' -o -path '*/generate-rpm/*' \) \( -name '*.deb' -o -name '*.rpm' -o -name '*.dmg' \) -exec cp {} dist/ \;
           ls -l dist
           test -n "$(ls dist)"
 

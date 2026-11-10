@@ -2,6 +2,7 @@
 name = "hm-gui"
 version = "0.1.0"
 description = "A desktop GUI for home-manager"
+license = "MIT"
 authors = ["Adham Salama"]
 edition = "2024"
 
@@ -44,3 +45,16 @@ icon = ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/i
 category = "Utility"
 short_description = "A desktop GUI for home-manager"
 deb_depends = ["libfontconfig1", "libxkbcommon0", "libxkbcommon-x11-0"]
+
+# cargo-bundle can't build RPMs yet, so they come from cargo-generate-rpm.
+[package.metadata.generate-rpm]
+assets = [
+    { source = "target/release/hm-gui", dest = "/usr/bin/hm-gui", mode = "755" },
+    { source = "packaging/hm-gui.desktop", dest = "/usr/share/applications/hm-gui.desktop", mode = "644" },
+    { source = "icons/128x128.png", dest = "/usr/share/icons/hicolor/128x128/apps/hm-gui.png", mode = "644" },
+]
+
+[package.metadata.generate-rpm.requires]
+fontconfig = "*"
+libxkbcommon = "*"
+libxkbcommon-x11 = "*"

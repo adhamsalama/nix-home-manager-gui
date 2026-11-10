@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Home Manager GUI
+Comment=A desktop GUI for home-manager
+Exec=hm-gui
+Icon=hm-gui
+Categories=Utility;
+Terminal=false

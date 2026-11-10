@@ -26,4 +26,10 @@ cargo test   # editing, parsing, form and diff tests
 
 ## Packages
 
-`.github/workflows/build.yml` builds `.deb` and `.rpm` (Linux) and a universal `.dmg` (macOS) with [cargo-bundle](https://github.com/burtonageo/cargo-bundle). Pushing a `v*` tag creates a draft release with them.
+`.github/workflows/build.yml` builds `.deb` and `.rpm` (Linux) and a universal `.dmg` (macOS) with [cargo-bundle](https://github.com/burtonageo/cargo-bundle), and the `.rpm` with [cargo-generate-rpm](https://github.com/cat-in-136/cargo-generate-rpm). Pushing a `v*` tag creates a draft release with them.
+
+## License
+
+MIT, see [LICENSE](LICENSE). The UI is built with [Slint](https://slint.dev), used under its royalty-free license.
+
+[![Made with Slint](https://raw.githubusercontent.com/slint-ui/slint/master/logo/MadeWithSlint-logo-whitebg.png)](https://slint.dev)
