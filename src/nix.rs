@@ -219,7 +219,13 @@ pub async fn eval_option(settings: &Settings, loc: &[String]) -> Result<String> 
 pub struct SearchResults {
     /// Which nixpkgs was searched, for display.
     pub source: String,
+    /// Every match, or one page of them when `paged`.
     pub packages: Vec<PackageInfo>,
+    /// How many packages matched in all.
+    pub total: usize,
+    /// Whether the source pages on its side (search.nixos.org); otherwise all
+    /// matches are here and the UI pages through them.
+    pub paged: bool,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -301,7 +307,9 @@ pub async fn search_packages(settings: &Settings, query: &str) -> Result<SearchR
                 }
                 return Ok(SearchResults {
                     source: source.to_string(),
+                    total: packages.len(),
                     packages,
+                    paged: false,
                 });
             }
             Err(e) => errors.push(format!("Searching {source}: {e:#}")),
@@ -389,23 +397,30 @@ pub async fn package_platforms(
     if attrs.is_empty() {
         return Ok(Default::default());
     }
-    let list = attrs
-        .iter()
-        .map(|a| format!("\"{a}\""))
-        .collect::<Vec<_>>()
-        .join(" ");
-    let apply = format!("({PLATFORMS_EXPR}) [ {list} ]");
     // Only the user's own nixpkgs: platforms of another one would mislead.
     let (_, nixpkgs) = nixpkgs_sources(settings).swap_remove(0);
-    let mut args = match &nixpkgs {
-        Nixpkgs::Channel => nix_args(&["eval", "--expr", "import <nixpkgs> { }"]),
-        Nixpkgs::FlakeInput(dir) => nix_args(&["eval", "--inputs-from", dir, "nixpkgs"]),
-        Nixpkgs::Registry => nix_args(&["eval", "nixpkgs"]),
-    };
-    // `builtins.currentSystem` and `<nixpkgs>` need impure evaluation.
-    args.extend(["--impure".into(), "--json".into(), "--apply".into(), apply]);
-    let out = capture("nix", &args).await?;
-    Ok(serde_json::from_str(&out)?)
+    let mut found = std::collections::HashMap::new();
+    // Batches keep the command line short when filtering thousands of results.
+    for chunk in attrs.chunks(1000) {
+        let list = chunk
+            .iter()
+            .map(|a| format!("\"{a}\""))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let apply = format!("({PLATFORMS_EXPR}) [ {list} ]");
+        let mut args = match &nixpkgs {
+            Nixpkgs::Channel => nix_args(&["eval", "--expr", "import <nixpkgs> { }"]),
+            Nixpkgs::FlakeInput(dir) => nix_args(&["eval", "--inputs-from", dir, "nixpkgs"]),
+            Nixpkgs::Registry => nix_args(&["eval", "nixpkgs"]),
+        };
+        // `builtins.currentSystem` and `<nixpkgs>` need impure evaluation.
+        args.extend(["--impure".into(), "--json".into(), "--apply".into(), apply]);
+        let out = capture("nix", &args).await?;
+        found.extend(serde_json::from_str::<
+            std::collections::HashMap<String, Option<Vec<String>>>,
+        >(&out)?);
+    }
+    Ok(found)
 }
 
 /// Summarizes a package's metadata as JSON-friendly values. `meta.homepage`

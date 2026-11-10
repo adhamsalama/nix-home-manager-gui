@@ -234,6 +234,7 @@ impl AppState {
         &self,
         query: String,
         platform: Option<String>,
+        from: usize,
     ) -> CmdResult<SearchResults> {
         let query = query.trim().to_string();
         if query.len() < 2 {
@@ -249,15 +250,18 @@ impl AppState {
                 &settings.nixos_search_channel,
                 &query,
                 platform.as_deref(),
+                from,
             )
             .await
             .map_err(err);
         }
-        match settings.mode {
+        let mut results = match settings.mode {
             Mode::Mock => mock::search_packages(&query),
             Mode::Real => nix::search_packages(&settings, &query).await,
         }
-        .map_err(err)
+        .map_err(err)?;
+        crate::search::rank_packages(&mut results.packages, &query);
+        Ok(results)
     }
 
     /// `meta.platforms` of search results, which `nix search` doesn't report.

@@ -67,12 +67,46 @@ export global PackagesState {
     callback search();
     callback set-source(int);
     callback platform-changed();
+    in property <string> page-text;
+    in property <bool> has-prev;
+    in property <bool> has-next;
+    // Progress or outcome of filtering local results by platform.
+    in property <string> filter-note;
+    callback prev-page();
+    callback next-page();
     callback add(string);
     callback add-anyway(string);
     callback cancel-warning();
     callback remove(string);
     callback open-option(string);
     callback open-url(string);
+}
+
+/// "← Previous   51–100 of 293   Next →"
+component Pager inherits HorizontalLayout {
+    callback turned();
+    spacing: 12px;
+    alignment: start;
+    Button {
+        text: "← Previous";
+        enabled: PackagesState.has-prev;
+        clicked => {
+            PackagesState.prev-page();
+            root.turned();
+        }
+    }
+    Muted {
+        text: PackagesState.page-text;
+        vertical-alignment: center;
+    }
+    Button {
+        text: "Next →";
+        enabled: PackagesState.has-next;
+        clicked => {
+            PackagesState.next-page();
+            root.turned();
+        }
+    }
 }
 
 component SearchView inherits ScrollView {
@@ -94,7 +128,7 @@ component SearchView inherits ScrollView {
                     PackagesState.set-source(self.current-index);
                 }
             }
-            if PackagesState.source == 1: ComboBox {
+            ComboBox {
                 width: 150px;
                 // Keep in sync with PLATFORM_FILTERS in src/app.rs.
                 model: ["Any platform", "Linux", "macOS", "x86_64-linux", "aarch64-linux", "x86_64-darwin", "aarch64-darwin"];
@@ -132,6 +166,14 @@ component SearchView inherits ScrollView {
         }
         if PackagesState.summary != "": Small {
             text: PackagesState.summary;
+        }
+        if PackagesState.filter-note != "": Small {
+            text: PackagesState.filter-note;
+        }
+        if PackagesState.has-prev || PackagesState.has-next: Pager {
+            turned => {
+                root.content-y = 0;
+            }
         }
         if PackagesState.no-results: Notice {
             text: "No packages found.";
@@ -212,6 +254,11 @@ component SearchView inherits ScrollView {
                 }
             }
             Divider { }
+        }
+        if PackagesState.has-prev || PackagesState.has-next: Pager {
+            turned => {
+                root.content-y = 0;
+            }
         }
     }
 }

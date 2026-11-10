@@ -2,7 +2,65 @@
 
 use std::collections::{BTreeSet, HashSet};
 
+use crate::nix::PackageInfo;
 use crate::options::HmOption;
+
+/// Packages shown per page of search results.
+pub const PACKAGE_PAGE_SIZE: usize = 50;
+
+/// Orders `nix search` results, which come back alphabetically, so the
+/// package named like the query comes first: exact name, then names that
+/// start with the query, then names containing it, then description-only
+/// matches. Top-level packages beat nested ones (`vimPlugins.…`), and shorter
+/// names beat longer ones.
+pub fn rank_packages(packages: &mut [PackageInfo], query: &str) {
+    let q = query.trim().to_lowercase();
+    let first = q.split_whitespace().next().unwrap_or("").to_string();
+    let tier = |p: &PackageInfo| -> u8 {
+        let attr = p.attr.to_lowercase();
+        let pname = p.pname.to_lowercase();
+        let leaf = attr.rsplit('.').next().unwrap_or(&attr).to_string();
+        if attr == q || pname == q {
+            0
+        } else if leaf == first {
+            1
+        } else if attr.starts_with(&first) || pname.starts_with(&first) {
+            2
+        } else if leaf.starts_with(&first) {
+            3
+        } else if attr.contains(&first) || pname.contains(&first) {
+            4
+        } else {
+            5
+        }
+    };
+    packages.sort_by_cached_key(|p| {
+        (
+            tier(p),
+            p.attr.contains('.'),
+            p.attr.len(),
+            p.attr.to_lowercase(),
+        )
+    });
+}
+
+/// Whether a package with these `meta.platforms` runs on `filter`: an OS
+/// (`linux`, `darwin`) or a system (`aarch64-darwin`). Empty platforms mean
+/// unrestricted.
+pub fn supports_platform(platforms: &[String], filter: &str) -> bool {
+    if platforms.is_empty() {
+        return true;
+    }
+    platforms.iter().any(|p| {
+        let (arch, os) = p.split_once('-').unwrap_or(("", p));
+        if filter.contains('-') {
+            let (farch, fos) = filter.split_once('-').unwrap_or(("", filter));
+            os == fos && (arch == farch || arch == "*")
+        } else {
+            os == filter
+        }
+    })
+}
 
 /// Indices of matching options, best first. Every term must appear in the
 /// name or description; name matches rank higher, prefix matches highest.
@@ -116,6 +174,58 @@ mod tests {
             .collect();
         assert_eq!(names, ["programs.git.enable", "x.ggit", "a.foo"]);
         assert!(search(&opts, "git nope", None).is_empty());
+    }
+
+    fn pkg(attr: &str) -> PackageInfo {
+        PackageInfo {
+            attr: attr.into(),
+            pname: attr.rsplit('.').next().unwrap().into(),
+            version: String::new(),
+            description: String::new(),
+            platforms: None,
+        }
+    }
+
+    #[test]
+    fn ranks_the_named_package_first() {
+        let mut ps: Vec<PackageInfo> = [
+            "gnvim",
+            "neovim-qt",
+            "neovim-unwrapped",
+            "vimPlugins.neovim-ayu",
+            "neovim",
+            "vimPlugins.nvim-tree",
+            "neovide",
+        ]
+        .map(pkg)
+        .into();
+        rank_packages(&mut ps, "neovim");
+        let names: Vec<&str> = ps.iter().map(|p| p.attr.as_str()).collect();
+        assert_eq!(
+            names,
+            [
+                "neovim",
+                "neovim-qt",
+                "neovim-unwrapped",
+                "vimPlugins.neovim-ayu",
+                "gnvim",
+                "neovide",
+                "vimPlugins.nvim-tree"
+            ]
+        );
+    }
+
+    #[test]
+    fn matches_platforms() {
+        let p: Vec<String> = ["x86_64-linux", "aarch64-darwin"].map(String::from).into();
+        assert!(supports_platform(&p, "linux"));
+        assert!(supports_platform(&p, "aarch64-darwin"));
+        assert!(!supports_platform(&p, "x86_64-darwin"));
+        assert!(supports_platform(
+            &["*-darwin".to_string()],
+            "x86_64-darwin"
+        ));
+        assert!(supports_platform(&[], "darwin"));
     }
 
     #[test]

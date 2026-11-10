@@ -8,6 +8,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use serde_json::{Value, json};
 
 use crate::nix::{PackageInfo, SearchResults};
+use crate::search::PACKAGE_PAGE_SIZE;
 
 const BACKEND: &str = "https://search.nixos.org/backend";
 /// Basic auth for the read-only credentials published in the nixos-search
@@ -16,7 +17,6 @@ const AUTH: &str = "Basic YVdWU0FMWHBadjpYOGdQSG56TDUyd0ZFZWt1eHNmUTljU2g=";
 const TIMEOUT_SECS: u64 = 30;
 /// Where nixos-search records the index schema version the frontend uses.
 const VERSION_URL: &str = "https://raw.githubusercontent.com/NixOS/nixos-search/main/version.nix";
-const MAX_RESULTS: usize = 200;
 
 /// Index names embed a schema version that changes now and then. Start with
 /// the one current when this was written, and look it up again on a 404.
@@ -43,13 +43,13 @@ fn platform_filter(platform: &str) -> Value {
     }
 }
 
-fn query_body(query: &str, platform: Option<&str>) -> Value {
+fn query_body(query: &str, platform: Option<&str>, from: usize) -> Value {
     let wildcard = format!("*{}*", query.to_lowercase());
     let mut filter = vec![json!({ "term": { "type": { "value": "package" } } })];
     filter.extend(platform.map(platform_filter));
     json!({
-        "from": 0,
-        "size": MAX_RESULTS,
+        "from": from,
+        "size": PACKAGE_PAGE_SIZE,
         "_source": ["package_attr_name", "package_pname", "package_pversion", "package_description", "package_platforms"],
         "query": {
             "bool": {
@@ -128,9 +128,15 @@ fn parse_frontend_version(text: &str) -> Option<u32> {
         .and_then(|v| v.parse().ok())
 }
 
-pub async fn search(channel: &str, query: &str, platform: Option<&str>) -> Result<SearchResults> {
+/// One page of matches, starting at match number `from`.
+pub async fn search(
+    channel: &str,
+    query: &str,
+    platform: Option<&str>,
+    from: usize,
+) -> Result<SearchResults> {
     let branch = branch(channel);
-    let body = query_body(query, platform).to_string();
+    let body = query_body(query, platform, from).to_string();
     let mut version = SCHEMA_VERSION.load(Ordering::Relaxed);
     let (mut status, mut text) = post_search(&format!("latest-{version}-{branch}"), &body).await?;
     if status == 404 {
@@ -153,20 +159,29 @@ pub async fn search(channel: &str, query: &str, platform: Option<&str>) -> Resul
             text.chars().take(300).collect::<String>()
         ),
     }
+    let (packages, total) = parse_hits(&text)?;
     Ok(SearchResults {
         source: format!("search.nixos.org ({branch})"),
-        packages: parse_hits(&text)?,
+        packages,
+        total,
+        paged: true,
     })
 }
 
-fn parse_hits(text: &str) -> Result<Vec<PackageInfo>> {
+/// The page's packages and the total number of matches.
+fn parse_hits(text: &str) -> Result<(Vec<PackageInfo>, usize)> {
     let v: Value =
         serde_json::from_str(text).context("search.nixos.org sent something that isn't JSON")?;
     let hits = v["hits"]["hits"]
         .as_array()
         .ok_or_else(|| anyhow!("unexpected response from search.nixos.org"))?;
+    // `{ "value": n, "relation": "eq" }`; Elasticsearch stops counting at 10,000.
+    let total = v["hits"]["total"]["value"]
+        .as_u64()
+        .or_else(|| v["hits"]["total"].as_u64())
+        .unwrap_or(hits.len() as u64) as usize;
     let mut seen = std::collections::HashSet::new();
-    Ok(hits
+    let packages = hits
         .iter()
         .map(|h| &h["_source"])
         .filter_map(|s| {
@@ -183,7 +198,8 @@ fn parse_hits(text: &str) -> Result<Vec<PackageInfo>> {
                 }),
             })
         })
-        .collect())
+        .collect();
+    Ok((packages, total))
 }
 
 #[cfg(test)]
@@ -212,7 +228,8 @@ mod tests {
             {"_source":{"package_attr_name":"neovim-unwrapped","package_pname":"neovim-unwrapped","package_pversion":"0.11.4","package_description":null}},
             {"_source":{"package_attr_name":"neovim","package_pname":"neovim","package_pversion":"0.11.4"}}
         ]}}"#;
-        let p = parse_hits(text).unwrap();
+        let (p, total) = parse_hits(text).unwrap();
+        assert_eq!(total, 3);
         assert_eq!(p.len(), 2);
         assert_eq!(p[0].attr, "neovim");
         assert_eq!(p[0].version, "0.11.4");
@@ -235,10 +252,11 @@ mod tests {
             platform_filter("aarch64-darwin"),
             json!({ "term": { "package_platforms": "aarch64-darwin" } })
         );
-        let body = query_body("vim", Some("darwin"));
+        let body = query_body("vim", Some("darwin"), 50);
+        assert_eq!(body["from"], 50);
         assert_eq!(body["query"]["bool"]["filter"].as_array().unwrap().len(), 2);
         assert_eq!(
-            query_body("vim", None)["query"]["bool"]["filter"]
+            query_body("vim", None, 0)["query"]["bool"]["filter"]
                 .as_array()
                 .unwrap()
                 .len(),

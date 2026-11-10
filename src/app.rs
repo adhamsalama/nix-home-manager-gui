@@ -26,7 +26,6 @@ use crate::{
 use crate::{search, text};
 
 const MAX_OPTION_RESULTS: usize = 300;
-const MAX_PACKAGE_RESULTS: usize = 200;
 /// What the search.nixos.org platform filter's entries mean, by index; the
 /// labels are in ui/packages.slint.
 const PLATFORM_FILTERS: [Option<&str>; 7] = [
@@ -64,8 +63,19 @@ struct OptionsPage {
 
 #[derive(Default)]
 struct PackagesPage {
+    /// Every match for local searches; the current page for paged sources.
     results: Vec<PackageInfo>,
     source: String,
+    /// Matches in all, for paged sources.
+    total: usize,
+    /// Whether the source pages for us (search.nixos.org).
+    paged: bool,
+    page: usize,
+    /// Bumped per search so late answers for an old search are dropped.
+    search_id: u64,
+    /// Packages whose platforms were looked up (found or not) or are being.
+    platforms_requested: HashSet<String>,
+    platforms_pending: usize,
     installed: HashSet<String>,
     checking: Option<String>,
     warning: Option<(String, String)>,
@@ -295,10 +305,19 @@ impl App {
         on!(PackagesState, on_search, |app| app.search_packages());
         on!(PackagesState, on_platform_changed, |app| {
             let ui = app.win.global::<PackagesState>();
-            if !ui.get_summary().is_empty() && ui.get_query().trim().chars().count() >= 2 {
-                app.search_packages();
+            let searched = !ui.get_summary().is_empty();
+            if app.pkgs.borrow().paged {
+                // search.nixos.org filters on its side.
+                if searched && ui.get_query().trim().chars().count() >= 2 {
+                    app.search_packages();
+                }
+            } else {
+                app.pkgs.borrow_mut().page = 0;
+                app.show_package_page();
             }
         });
+        on!(PackagesState, on_prev_page, |app| app.turn_package_page(-1));
+        on!(PackagesState, on_next_page, |app| app.turn_package_page(1));
         on!(PackagesState, on_set_source, |app, index| {
             let source = if index == 1 {
                 PackageSearch::NixosOrg
@@ -310,10 +329,15 @@ impl App {
                 ui.set_error(s(e));
             }
             // Results from the other source would be misleading now.
-            app.pkgs.borrow_mut().results.clear();
+            {
+                let mut pk = app.pkgs.borrow_mut();
+                pk.results.clear();
+                pk.total = 0;
+                pk.page = 0;
+            }
             ui.set_summary(s(""));
             ui.set_no_results(false);
-            app.update_package_rows();
+            app.show_package_page();
         });
         on!(PackagesState, on_add, |app, attr| app
             .add_package(attr.to_string()));
@@ -827,13 +851,131 @@ impl App {
         self.update_package_rows();
     }
 
-    fn update_package_rows(&self) {
+    fn platform_filter(&self) -> Option<&'static str> {
+        let i = self
+            .win
+            .global::<PackagesState>()
+            .get_platform_filter()
+            .max(0) as usize;
+        PLATFORM_FILTERS.get(i).copied().flatten()
+    }
+
+    /// Indices into `results` that pass the platform filter. Local results
+    /// are filtered here; search.nixos.org filters on its side.
+    fn filtered_packages(&self) -> Vec<usize> {
+        let pk = self.pkgs.borrow();
+        match self.platform_filter().filter(|_| !pk.paged) {
+            None => (0..pk.results.len()).collect(),
+            Some(f) => (0..pk.results.len())
+                .filter(|&i| {
+                    pk.results[i]
+                        .platforms
+                        .as_deref()
+                        .is_some_and(|ps| search::supports_platform(ps, f))
+                })
+                .collect(),
+        }
+    }
+
+    /// Indices into `results` shown on the current page.
+    fn page_packages(&self) -> Vec<usize> {
+        let filtered = self.filtered_packages();
+        let pk = self.pkgs.borrow();
+        if pk.paged {
+            return filtered;
+        }
+        filtered
+            .into_iter()
+            .skip(pk.page * search::PACKAGE_PAGE_SIZE)
+            .take(search::PACKAGE_PAGE_SIZE)
+            .collect()
+    }
+
+    /// Renders the current page of results, the pager and the summary, and
+    /// looks up platforms the page (or the platform filter) still needs.
+    fn show_package_page(self: &Rc<Self>) {
+        let ui = self.win.global::<PackagesState>();
+        let local_filter = self.platform_filter().filter(|_| !self.pkgs.borrow().paged);
+
+        // Filtering local results needs every result's platforms.
+        if local_filter.is_some() {
+            let missing: Vec<String> = {
+                let pk = self.pkgs.borrow();
+                pk.results
+                    .iter()
+                    .filter(|p| p.platforms.is_none() && !pk.platforms_requested.contains(&p.attr))
+                    .map(|p| p.attr.clone())
+                    .collect()
+            };
+            self.load_platforms(missing);
+        }
+        let waiting = local_filter.is_some() && self.pkgs.borrow().platforms_pending > 0;
+
+        let shown = if waiting {
+            vec![]
+        } else {
+            self.page_packages()
+        };
+        let filtered = if waiting {
+            0
+        } else {
+            self.filtered_packages().len()
+        };
+        {
+            let pk = self.pkgs.borrow();
+            let (count, first) = if pk.paged {
+                (pk.total, pk.page * search::PACKAGE_PAGE_SIZE)
+            } else {
+                (filtered, pk.page * search::PACKAGE_PAGE_SIZE)
+            };
+            let has_results = !pk.source.is_empty() && count > 0 && !waiting;
+            ui.set_page_text(s(if has_results {
+                format!(
+                    "{}–{} of {count}",
+                    first + 1,
+                    (first + shown.len()).max(first + 1)
+                )
+            } else {
+                String::new()
+            }));
+            ui.set_has_prev(has_results && pk.page > 0);
+            ui.set_has_next(has_results && first + shown.len() < count);
+            ui.set_filter_note(s(match (waiting, local_filter) {
+                (true, _) => format!(
+                    "Checking which of the {} results run on the chosen platform…",
+                    pk.results.len()
+                ),
+                (false, Some(_)) if !pk.source.is_empty() => {
+                    format!(
+                        "{filtered} of {} results run on the chosen platform.",
+                        pk.results.len()
+                    )
+                }
+                _ => String::new(),
+            }));
+            ui.set_no_results(!pk.source.is_empty() && !waiting && count == 0);
+        }
+
+        // Platforms for this page's rows, shown next to each result.
+        let missing: Vec<String> = {
+            let pk = self.pkgs.borrow();
+            shown
+                .iter()
+                .map(|&i| &pk.results[i])
+                .filter(|p| p.platforms.is_none() && !pk.platforms_requested.contains(&p.attr))
+                .map(|p| p.attr.clone())
+                .collect()
+        };
+        self.load_platforms(missing);
+        self.set_package_rows(&shown);
+    }
+
+    fn set_package_rows(&self, shown: &[usize]) {
         let ui = self.win.global::<PackagesState>();
         let pk = self.pkgs.borrow();
-        let rows: Vec<PkgRow> = pk
-            .results
+        let rows: Vec<PkgRow> = shown
             .iter()
-            .take(MAX_PACKAGE_RESULTS)
+            .map(|&i| &pk.results[i])
             .map(|p| PkgRow {
                 attr: s(&p.attr),
                 description: s(&p.description),
@@ -860,79 +1002,118 @@ impl App {
         ui.set_checking_any(pk.checking.is_some());
     }
 
+    /// Re-renders rows after installed/checking/warning state changes.
+    fn update_package_rows(&self) {
+        let shown = self.page_packages();
+        self.set_package_rows(&shown);
+    }
+
+    /// Starts a new search from the first page.
     fn search_packages(self: &Rc<Self>) {
+        {
+            let mut pk = self.pkgs.borrow_mut();
+            pk.search_id += 1;
+            pk.page = 0;
+        }
+        self.fetch_packages(0);
+    }
+
+    /// Runs the current query, from match number `from` for paged sources.
+    fn fetch_packages(self: &Rc<Self>, from: usize) {
         let ui = self.win.global::<PackagesState>();
         ui.set_searching(true);
         ui.set_error(s(""));
         let be = self.be.clone();
         let query = ui.get_query().to_string();
+        // Only search.nixos.org filters while searching; local results are
+        // filtered once their platforms are known.
         let platform = (ui.get_source() == 1)
-            .then(|| {
-                PLATFORM_FILTERS
-                    .get(ui.get_platform_filter().max(0) as usize)
-                    .copied()
-                    .flatten()
-            })
+            .then(|| self.platform_filter())
             .flatten()
             .map(String::from);
+        let id = self.pkgs.borrow().search_id;
         self.spawn(
-            async move { be.search_packages(query, platform).await },
-            |app, r| {
+            async move { be.search_packages(query, platform, from).await },
+            move |app, r| {
+                if app.pkgs.borrow().search_id != id {
+                    return;
+                }
                 let ui = app.win.global::<PackagesState>();
                 ui.set_searching(false);
                 match r {
                     Ok(res) => {
-                        let n = res.packages.len();
+                        let n = res.total;
                         ui.set_summary(s(format!(
-                            "Searched {}: {n} result{}{}.",
+                            "Searched {}: {n} result{}.",
                             res.source,
                             if n == 1 { "" } else { "s" },
-                            if n > MAX_PACKAGE_RESULTS {
-                                ", showing the first 200"
-                            } else {
-                                ""
-                            }
                         )));
-                        ui.set_no_results(n == 0);
                         let mut pk = app.pkgs.borrow_mut();
+                        if from == 0 {
+                            pk.platforms_requested.clear();
+                            pk.platforms_pending = 0;
+                        }
+                        pk.page = from / search::PACKAGE_PAGE_SIZE;
                         pk.results = res.packages;
+                        pk.total = res.total;
+                        pk.paged = res.paged;
                         pk.source = res.source;
                         pk.warning = None;
                     }
                     Err(e) => ui.set_error(s(e)),
                 }
-                app.update_package_rows();
-                app.load_result_platforms();
+                app.show_package_page();
             },
         );
     }
 
-    /// Fills in platforms for results whose search didn't report them.
-    fn load_result_platforms(self: &Rc<Self>) {
-        let attrs: Vec<String> = self
-            .pkgs
-            .borrow()
-            .results
-            .iter()
-            .take(MAX_PACKAGE_RESULTS)
-            .filter(|p| p.platforms.is_none())
-            .map(|p| p.attr.clone())
-            .collect();
+    fn turn_package_page(self: &Rc<Self>, delta: i32) {
+        let (paged, page) = {
+            let pk = self.pkgs.borrow();
+            (pk.paged, pk.page)
+        };
+        let Some(page) = page.checked_add_signed(delta as isize) else {
+            return;
+        };
+        if paged {
+            self.fetch_packages(page * search::PACKAGE_PAGE_SIZE);
+        } else {
+            self.pkgs.borrow_mut().page = page;
+            self.show_package_page();
+        }
+    }
+
+    /// Looks up `meta.platforms` for results the search didn't report them for.
+    fn load_platforms(self: &Rc<Self>, attrs: Vec<String>) {
         if attrs.is_empty() {
             return;
         }
+        let id = {
+            let mut pk = self.pkgs.borrow_mut();
+            pk.platforms_requested.extend(attrs.iter().cloned());
+            pk.platforms_pending += 1;
+            pk.search_id
+        };
         let be = self.be.clone();
-        // Best effort: without platforms the results still work.
         self.spawn(
             async move { be.package_platforms(attrs).await },
-            |app, r| {
-                let Ok(found) = r else { return };
-                for p in app.pkgs.borrow_mut().results.iter_mut() {
-                    if let Some(Some(ps)) = found.get(&p.attr) {
-                        p.platforms = Some(ps.clone());
+            move |app, r| {
+                {
+                    let mut pk = app.pkgs.borrow_mut();
+                    if pk.search_id != id {
+                        return;
+                    }
+                    pk.platforms_pending -= 1;
+                    // Best effort: a failed lookup leaves those results without platforms.
+                    if let Ok(found) = r {
+                        for p in pk.results.iter_mut() {
+                            if let Some(Some(ps)) = found.get(&p.attr) {
+                                p.platforms = Some(ps.clone());
+                            }
+                        }
                     }
                 }
-                app.update_package_rows();
+                app.show_package_page();
             },
         );
     }

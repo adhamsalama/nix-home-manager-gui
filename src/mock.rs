@@ -24,7 +24,7 @@ pub fn options() -> Result<Vec<HmOption>> {
 pub fn search_packages(query: &str) -> Result<SearchResults> {
     let all: Vec<serde_json::Value> = serde_json::from_str(PACKAGES_JSON)?;
     let q = query.to_lowercase();
-    let packages = all
+    let packages: Vec<PackageInfo> = all
         .into_iter()
         .map(|v| PackageInfo {
             attr: v["attr"].as_str().unwrap_or_default().into(),
@@ -37,7 +37,9 @@ pub fn search_packages(query: &str) -> Result<SearchResults> {
         .collect();
     Ok(SearchResults {
         source: "mock data".into(),
+        total: packages.len(),
         packages,
+        paged: false,
     })
 }
 
