@@ -1,6 +1,6 @@
 //! Package search through search.nixos.org's Elasticsearch backend, the same
-//! one its web frontend queries. Requests go through the system `curl`, like
-//! the app's other commands, so the binary doesn't carry a TLS stack.
+//! one its web frontend queries. Requests use `ureq` with rustls on tokio's
+//! blocking pool.
 
 use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -10,9 +10,10 @@ use serde_json::{Value, json};
 use crate::nix::{PackageInfo, SearchResults};
 
 const BACKEND: &str = "https://search.nixos.org/backend";
-/// Read-only credentials published in the nixos-search frontend
-/// (frontend/src/index.js).
-const AUTH: &str = "aWVSALXpZv:X8gPHnzL52wFEekuxsfQ9cSh";
+/// Basic auth for the read-only credentials published in the nixos-search
+/// frontend (frontend/src/index.js): `aWVSALXpZv:X8gPHnzL52wFEekuxsfQ9cSh`.
+const AUTH: &str = "Basic YVdWU0FMWHBadjpYOGdQSG56TDUyd0ZFZWt1eHNmUTljU2g=";
+const TIMEOUT_SECS: u64 = 30;
 /// Where nixos-search records the index schema version the frontend uses.
 const VERSION_URL: &str = "https://raw.githubusercontent.com/NixOS/nixos-search/main/version.nix";
 const MAX_RESULTS: usize = 200;
@@ -83,41 +84,38 @@ fn query_body(query: &str, platform: Option<&str>) -> Value {
     })
 }
 
-/// Runs curl and returns the HTTP status and body.
-async fn curl(args: &[&str]) -> Result<(u16, String)> {
-    let out = tokio::process::Command::new("curl")
-        .args(["-sS", "--max-time", "30", "-w", "\n%{http_code}"])
-        .args(args)
-        .kill_on_drop(true)
-        .output()
-        .await
-        .context("couldn't run curl; is it installed?")?;
-    if !out.status.success() {
-        bail!(
-            "couldn't reach search.nixos.org: {}",
-            String::from_utf8_lossy(&out.stderr).trim()
-        );
-    }
-    let text = String::from_utf8_lossy(&out.stdout);
-    let (body, code) = text
-        .rsplit_once('\n')
-        .ok_or_else(|| anyhow!("empty response from curl"))?;
-    Ok((code.trim().parse().unwrap_or(0), body.to_string()))
+/// Runs a blocking request off the async runtime and returns the HTTP status
+/// and body. Error statuses come back as values so a 404 can be handled.
+async fn send(
+    request: impl FnOnce(&ureq::Agent) -> Result<ureq::http::Response<ureq::Body>, ureq::Error>
+    + Send
+    + 'static,
+) -> Result<(u16, String)> {
+    tokio::task::spawn_blocking(move || {
+        let agent: ureq::Agent = ureq::Agent::config_builder()
+            .timeout_global(Some(std::time::Duration::from_secs(TIMEOUT_SECS)))
+            .http_status_as_error(false)
+            .build()
+            .into();
+        let mut response =
+            request(&agent).map_err(|e| anyhow!("couldn't reach search.nixos.org: {e}"))?;
+        let status = response.status().as_u16();
+        let body = response.body_mut().read_to_string().unwrap_or_default();
+        Ok((status, body))
+    })
+    .await?
 }
 
 async fn post_search(index: &str, body: &str) -> Result<(u16, String)> {
     let url = format!("{BACKEND}/{index}/_search");
-    curl(&[
-        "-u",
-        AUTH,
-        "-H",
-        "Content-Type: application/json",
-        "-X",
-        "POST",
-        "--data-binary",
-        body,
-        &url,
-    ])
+    let body = body.to_string();
+    send(move |agent| {
+        agent
+            .post(&url)
+            .header("Authorization", AUTH)
+            .header("Content-Type", "application/json")
+            .send(&body)
+    })
     .await
 }
 
@@ -137,7 +135,7 @@ pub async fn search(channel: &str, query: &str, platform: Option<&str>) -> Resul
     let (mut status, mut text) = post_search(&format!("latest-{version}-{branch}"), &body).await?;
     if status == 404 {
         // Either the schema version moved on or the channel doesn't exist.
-        let (vstatus, vtext) = curl(&[VERSION_URL]).await?;
+        let (vstatus, vtext) = send(|agent| agent.get(VERSION_URL).call()).await?;
         if let Some(v) = parse_frontend_version(&vtext).filter(|&v| vstatus == 200 && v != version)
         {
             SCHEMA_VERSION.store(v, Ordering::Relaxed);

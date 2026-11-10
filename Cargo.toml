@@ -19,6 +19,9 @@ tokio = { version = "1.54.1", features = ["process", "io-util", "macros", "time"
 rowan = "0.16"
 open = "5"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+# HTTPS for search.nixos.org. rustls (with ring) is compiled in, so there is no
+# OpenSSL dependency; ~1.4 MB of binary.
+ureq = { version = "3", default-features = false, features = ["rustls"] }
 png = { version = "0.18", optional = true }
 
 [features]

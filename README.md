@@ -10,7 +10,7 @@ A desktop GUI for [home-manager](https://github.com/nix-community/home-manager),
 
 ## Development
 
-Requires Rust. On Linux, also install fontconfig and xkbcommon headers (on Debian/Ubuntu: `libfontconfig1-dev libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libx11-xcb-dev`).
+Requires Rust. On Linux, also install fontconfig and xkbcommon headers (on Debian/Ubuntu: `libfontconfig1-dev libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libx11-xcb-dev`; on Fedora: `fontconfig-devel libxkbcommon-devel libxkbcommon-x11-devel wayland-devel libX11-devel`).
 
 ```bash
 cargo run
