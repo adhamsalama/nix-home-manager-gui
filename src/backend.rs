@@ -230,7 +230,11 @@ impl AppState {
         })
     }
 
-    pub async fn search_packages(&self, query: String) -> CmdResult<SearchResults> {
+    pub async fn search_packages(
+        &self,
+        query: String,
+        platform: Option<String>,
+    ) -> CmdResult<SearchResults> {
         let query = query.trim().to_string();
         if query.len() < 2 {
             return Err("type at least two characters".into());
@@ -241,15 +245,35 @@ impl AppState {
         let settings = self.settings();
         // search.nixos.org needs no local nix, so it works in mock mode too.
         if settings.package_search == PackageSearch::NixosOrg {
-            return crate::nixos_search::search(&settings.nixos_search_channel, &query)
-                .await
-                .map_err(err);
+            return crate::nixos_search::search(
+                &settings.nixos_search_channel,
+                &query,
+                platform.as_deref(),
+            )
+            .await
+            .map_err(err);
         }
         match settings.mode {
             Mode::Mock => mock::search_packages(&query),
             Mode::Real => nix::search_packages(&settings, &query).await,
         }
         .map_err(err)
+    }
+
+    /// `meta.platforms` of search results, which `nix search` doesn't report.
+    pub async fn package_platforms(
+        &self,
+        attrs: Vec<String>,
+    ) -> CmdResult<std::collections::HashMap<String, Option<Vec<String>>>> {
+        match self.settings().mode {
+            Mode::Mock => Ok(attrs
+                .iter()
+                .map(|a| (a.clone(), Some(mock::platforms(a))))
+                .collect()),
+            Mode::Real => nix::package_platforms(&self.settings(), &attrs)
+                .await
+                .map_err(err),
+        }
     }
 
     /// Switches the Packages page between `nix search` and search.nixos.org.

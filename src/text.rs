@@ -52,6 +52,29 @@ fn os_label(os: &str) -> String {
         .map_or_else(|| os.to_string(), |(_, v)| v.to_string())
 }
 
+/// "Linux" or "macOS", for comparing with `group_platforms` labels.
+pub fn current_os_label() -> String {
+    os_label(match std::env::consts::OS {
+        "macos" => "darwin",
+        os => os,
+    })
+}
+
+/// The OSes a package supports, e.g. "Linux · macOS"; "Any platform" when
+/// unrestricted. The bool says whether this machine's OS is among them.
+pub fn platforms_summary(platforms: &[String]) -> (String, bool) {
+    let oses: Vec<String> = group_platforms(platforms)
+        .into_iter()
+        .map(|(os, _)| os)
+        .filter(|os| !os.starts_with('('))
+        .collect();
+    if oses.is_empty() {
+        return ("Any platform".into(), true);
+    }
+    let here = oses.contains(&current_os_label());
+    (oses.join(" · "), here)
+}
+
 /// Groups systems like `x86_64-linux` by OS: `[("Linux", ["x86_64", "aarch64"]), ...]`.
 pub fn group_platforms(platforms: &[String]) -> Vec<(String, Vec<String>)> {
     let mut groups: Vec<(String, Vec<String>)> = Vec::new();
@@ -205,6 +228,21 @@ mod tests {
         );
         assert!(matches("*-darwin", "aarch64-darwin"));
         assert!(!matches("*-darwin", "aarch64-linux"));
+    }
+
+    #[test]
+    fn summarizes_platforms() {
+        let p: Vec<String> = ["x86_64-linux", "aarch64-darwin", "(pattern)"]
+            .map(String::from)
+            .into();
+        assert_eq!(platforms_summary(&p), ("Linux · macOS".into(), true));
+        assert_eq!(platforms_summary(&[]), ("Any platform".into(), true));
+        let other = if cfg!(target_os = "macos") {
+            "x86_64-linux"
+        } else {
+            "aarch64-darwin"
+        };
+        assert!(!platforms_summary(&[other.to_string()]).1);
     }
 
     #[test]

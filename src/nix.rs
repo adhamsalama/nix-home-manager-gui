@@ -19,6 +19,8 @@ pub struct PackageInfo {
     pub pname: String,
     pub version: String,
     pub description: String,
+    /// `meta.platforms`, empty when unrestricted; None until it's been looked up.
+    pub platforms: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -352,10 +354,58 @@ fn parse_search(json: &str) -> Result<Vec<PackageInfo>> {
             pname: v["pname"].as_str().unwrap_or_default().to_string(),
             version: v["version"].as_str().unwrap_or_default().to_string(),
             description: v["description"].as_str().unwrap_or_default().to_string(),
+            // `nix search` doesn't report them; see `package_platforms`.
+            platforms: None,
         })
         .collect();
     out.sort_by(|a, b| a.attr.cmp(&b.attr));
     Ok(out)
+}
+
+/// `meta.platforms` of several packages, keyed by attribute path. Takes the
+/// nixpkgs root (a flake or the imported channel) so one evaluation serves
+/// every package. Entries are null when a package can't be evaluated.
+const PLATFORMS_EXPR: &str = r#"attrs: x:
+  let
+    pkgs = x.legacyPackages.${builtins.currentSystem} or x;
+    lib = pkgs.lib;
+    toList = v: if builtins.isList v then v else if v == null then [ ] else [ v ];
+    platform = p:
+      if builtins.isString p then p
+      else if p ? kernel.name then "*-${p.kernel.name}"
+      else "(pattern)";
+    safe = v: let t = builtins.tryEval (builtins.deepSeq v v); in if t.success then t.value else null;
+    of = a: safe (map platform (toList ((lib.attrByPath (lib.splitString "." a) { } pkgs).meta.platforms or [ ])));
+  in builtins.listToAttrs (map (a: { name = a; value = of a; }) attrs)"#;
+
+pub async fn package_platforms(
+    settings: &Settings,
+    attrs: &[String],
+) -> Result<std::collections::HashMap<String, Option<Vec<String>>>> {
+    let attrs: Vec<&String> = attrs
+        .iter()
+        .filter(|a| crate::nix_edit::is_package_attr(a))
+        .collect();
+    if attrs.is_empty() {
+        return Ok(Default::default());
+    }
+    let list = attrs
+        .iter()
+        .map(|a| format!("\"{a}\""))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let apply = format!("({PLATFORMS_EXPR}) [ {list} ]");
+    // Only the user's own nixpkgs: platforms of another one would mislead.
+    let (_, nixpkgs) = nixpkgs_sources(settings).swap_remove(0);
+    let mut args = match &nixpkgs {
+        Nixpkgs::Channel => nix_args(&["eval", "--expr", "import <nixpkgs> { }"]),
+        Nixpkgs::FlakeInput(dir) => nix_args(&["eval", "--inputs-from", dir, "nixpkgs"]),
+        Nixpkgs::Registry => nix_args(&["eval", "nixpkgs"]),
+    };
+    // `builtins.currentSystem` and `<nixpkgs>` need impure evaluation.
+    args.extend(["--impure".into(), "--json".into(), "--apply".into(), apply]);
+    let out = capture("nix", &args).await?;
+    Ok(serde_json::from_str(&out)?)
 }
 
 /// Summarizes a package's metadata as JSON-friendly values. `meta.homepage`

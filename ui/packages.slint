@@ -5,6 +5,9 @@ export struct PkgRow {
     attr: string,
     description: string,
     version: string,
+    // e.g. "Linux · macOS"; empty while unknown
+    platforms: string,
+    unsupported-here: bool,
     installed: bool,
     checking: bool,
     warning: string,
@@ -32,6 +35,8 @@ export global PackagesState {
     in-out property <string> query;
     // 0: nix search on the user's nixpkgs, 1: search.nixos.org
     in-out property <int> source;
+    // Index into the platform filter's entries; only for search.nixos.org.
+    in-out property <int> platform-filter;
     in property <bool> searching;
     in property <string> error;
     in property <string> summary;
@@ -61,6 +66,7 @@ export global PackagesState {
     callback back();
     callback search();
     callback set-source(int);
+    callback platform-changed();
     callback add(string);
     callback add-anyway(string);
     callback cancel-warning();
@@ -86,6 +92,15 @@ component SearchView inherits ScrollView {
                 current-index <=> PackagesState.source;
                 selected => {
                     PackagesState.set-source(self.current-index);
+                }
+            }
+            if PackagesState.source == 1: ComboBox {
+                width: 150px;
+                // Keep in sync with PLATFORM_FILTERS in src/app.rs.
+                model: ["Any platform", "Linux", "macOS", "x86_64-linux", "aarch64-linux", "x86_64-darwin", "aarch64-darwin"];
+                current-index <=> PackagesState.platform-filter;
+                selected => {
+                    PackagesState.platform-changed();
                 }
             }
             LineEdit {
@@ -146,6 +161,11 @@ component SearchView inherits ScrollView {
                         }
                         if p.description != "": Small {
                             text: p.description;
+                        }
+                        if p.platforms != "": Text {
+                            text: p.unsupported-here ? p.platforms + " · not available on this OS" : p.platforms;
+                            font-size: Theme.small;
+                            color: p.unsupported-here ? Theme.warn : Theme.muted;
                         }
                     }
                 }

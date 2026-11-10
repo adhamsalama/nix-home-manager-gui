@@ -27,6 +27,17 @@ use crate::{search, text};
 
 const MAX_OPTION_RESULTS: usize = 300;
 const MAX_PACKAGE_RESULTS: usize = 200;
+/// What the search.nixos.org platform filter's entries mean, by index; the
+/// labels are in ui/packages.slint.
+const PLATFORM_FILTERS: [Option<&str>; 7] = [
+    None,
+    Some("linux"),
+    Some("darwin"),
+    Some("x86_64-linux"),
+    Some("aarch64-linux"),
+    Some("x86_64-darwin"),
+    Some("aarch64-darwin"),
+];
 
 /// Which page started a run, so its output goes to the right log.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -187,6 +198,12 @@ impl App {
             self.win.global::<Shell>().set_page(1);
             self.select_package(Some(attr));
         }
+        if let Ok(query) = std::env::var("HM_GUI_QUERY") {
+            let ui = self.win.global::<PackagesState>();
+            self.win.global::<Shell>().set_page(1);
+            ui.set_query(s(query));
+            self.search_packages();
+        }
         if let Ok(name) = std::env::var("HM_GUI_SELECT") {
             self.focus_option(&name);
         }
@@ -276,6 +293,12 @@ impl App {
             .select_package(Some(attr.to_string())));
         on!(PackagesState, on_back, |app| app.select_package(None));
         on!(PackagesState, on_search, |app| app.search_packages());
+        on!(PackagesState, on_platform_changed, |app| {
+            let ui = app.win.global::<PackagesState>();
+            if !ui.get_summary().is_empty() && ui.get_query().trim().chars().count() >= 2 {
+                app.search_packages();
+            }
+        });
         on!(PackagesState, on_set_source, |app, index| {
             let source = if index == 1 {
                 PackageSearch::NixosOrg
@@ -815,6 +838,15 @@ impl App {
                 attr: s(&p.attr),
                 description: s(&p.description),
                 version: s(&p.version),
+                platforms: s(p
+                    .platforms
+                    .as_deref()
+                    .map(|ps| text::platforms_summary(ps).0)
+                    .unwrap_or_default()),
+                unsupported_here: p
+                    .platforms
+                    .as_deref()
+                    .is_some_and(|ps| !text::platforms_summary(ps).1),
                 installed: pk.installed.contains(&p.attr),
                 checking: pk.checking.as_deref() == Some(&p.attr),
                 warning: s(pk
@@ -834,32 +866,75 @@ impl App {
         ui.set_error(s(""));
         let be = self.be.clone();
         let query = ui.get_query().to_string();
-        self.spawn(async move { be.search_packages(query).await }, |app, r| {
-            let ui = app.win.global::<PackagesState>();
-            ui.set_searching(false);
-            match r {
-                Ok(res) => {
-                    let n = res.packages.len();
-                    ui.set_summary(s(format!(
-                        "Searched {}: {n} result{}{}.",
-                        res.source,
-                        if n == 1 { "" } else { "s" },
-                        if n > MAX_PACKAGE_RESULTS {
-                            ", showing the first 200"
-                        } else {
-                            ""
-                        }
-                    )));
-                    ui.set_no_results(n == 0);
-                    let mut pk = app.pkgs.borrow_mut();
-                    pk.results = res.packages;
-                    pk.source = res.source;
-                    pk.warning = None;
+        let platform = (ui.get_source() == 1)
+            .then(|| {
+                PLATFORM_FILTERS
+                    .get(ui.get_platform_filter().max(0) as usize)
+                    .copied()
+                    .flatten()
+            })
+            .flatten()
+            .map(String::from);
+        self.spawn(
+            async move { be.search_packages(query, platform).await },
+            |app, r| {
+                let ui = app.win.global::<PackagesState>();
+                ui.set_searching(false);
+                match r {
+                    Ok(res) => {
+                        let n = res.packages.len();
+                        ui.set_summary(s(format!(
+                            "Searched {}: {n} result{}{}.",
+                            res.source,
+                            if n == 1 { "" } else { "s" },
+                            if n > MAX_PACKAGE_RESULTS {
+                                ", showing the first 200"
+                            } else {
+                                ""
+                            }
+                        )));
+                        ui.set_no_results(n == 0);
+                        let mut pk = app.pkgs.borrow_mut();
+                        pk.results = res.packages;
+                        pk.source = res.source;
+                        pk.warning = None;
+                    }
+                    Err(e) => ui.set_error(s(e)),
                 }
-                Err(e) => ui.set_error(s(e)),
-            }
-            app.update_package_rows();
-        });
+                app.update_package_rows();
+                app.load_result_platforms();
+            },
+        );
+    }
+
+    /// Fills in platforms for results whose search didn't report them.
+    fn load_result_platforms(self: &Rc<Self>) {
+        let attrs: Vec<String> = self
+            .pkgs
+            .borrow()
+            .results
+            .iter()
+            .take(MAX_PACKAGE_RESULTS)
+            .filter(|p| p.platforms.is_none())
+            .map(|p| p.attr.clone())
+            .collect();
+        if attrs.is_empty() {
+            return;
+        }
+        let be = self.be.clone();
+        // Best effort: without platforms the results still work.
+        self.spawn(
+            async move { be.package_platforms(attrs).await },
+            |app, r| {
+                let Ok(found) = r else { return };
+                for p in app.pkgs.borrow_mut().results.iter_mut() {
+                    if let Some(Some(ps)) = found.get(&p.attr) {
+                        p.platforms = Some(ps.clone());
+                    }
+                }
+                app.update_package_rows();
+            },
+        );
     }
 
     /// Checks that the package builds on this machine before adding it.

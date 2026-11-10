@@ -32,15 +32,27 @@ fn branch(channel: &str) -> String {
     }
 }
 
-fn query_body(query: &str) -> Value {
+/// A filter on `package_platforms`: an OS like `linux` matches any
+/// architecture, a system like `aarch64-darwin` only itself.
+fn platform_filter(platform: &str) -> Value {
+    if platform.contains('-') {
+        json!({ "term": { "package_platforms": platform } })
+    } else {
+        json!({ "wildcard": { "package_platforms": { "value": format!("*-{platform}") } } })
+    }
+}
+
+fn query_body(query: &str, platform: Option<&str>) -> Value {
     let wildcard = format!("*{}*", query.to_lowercase());
+    let mut filter = vec![json!({ "term": { "type": { "value": "package" } } })];
+    filter.extend(platform.map(platform_filter));
     json!({
         "from": 0,
         "size": MAX_RESULTS,
-        "_source": ["package_attr_name", "package_pname", "package_pversion", "package_description"],
+        "_source": ["package_attr_name", "package_pname", "package_pversion", "package_description", "package_platforms"],
         "query": {
             "bool": {
-                "filter": [{ "term": { "type": { "value": "package" } } }],
+                "filter": filter,
                 "must": [{
                     "dis_max": {
                         "tie_breaker": 0.7,
@@ -118,9 +130,9 @@ fn parse_frontend_version(text: &str) -> Option<u32> {
         .and_then(|v| v.parse().ok())
 }
 
-pub async fn search(channel: &str, query: &str) -> Result<SearchResults> {
+pub async fn search(channel: &str, query: &str, platform: Option<&str>) -> Result<SearchResults> {
     let branch = branch(channel);
-    let body = query_body(query).to_string();
+    let body = query_body(query, platform).to_string();
     let mut version = SCHEMA_VERSION.load(Ordering::Relaxed);
     let (mut status, mut text) = post_search(&format!("latest-{version}-{branch}"), &body).await?;
     if status == 404 {
@@ -166,6 +178,11 @@ fn parse_hits(text: &str) -> Result<Vec<PackageInfo>> {
                 pname: s["package_pname"].as_str().unwrap_or_default().into(),
                 version: s["package_pversion"].as_str().unwrap_or_default().into(),
                 description: s["package_description"].as_str().unwrap_or_default().into(),
+                platforms: s["package_platforms"].as_array().map(|ps| {
+                    ps.iter()
+                        .filter_map(|p| p.as_str().map(String::from))
+                        .collect()
+                }),
             })
         })
         .collect())
@@ -193,7 +210,7 @@ mod tests {
     #[test]
     fn parses_hits_keeping_order_and_dropping_duplicates() {
         let text = r#"{"hits":{"hits":[
-            {"_source":{"package_attr_name":"neovim","package_pname":"neovim","package_pversion":"0.11.4","package_description":"Vim text editor fork"}},
+            {"_source":{"package_attr_name":"neovim","package_pname":"neovim","package_pversion":"0.11.4","package_description":"Vim text editor fork","package_platforms":["x86_64-linux","aarch64-darwin"]}},
             {"_source":{"package_attr_name":"neovim-unwrapped","package_pname":"neovim-unwrapped","package_pversion":"0.11.4","package_description":null}},
             {"_source":{"package_attr_name":"neovim","package_pname":"neovim","package_pversion":"0.11.4"}}
         ]}}"#;
@@ -203,5 +220,31 @@ mod tests {
         assert_eq!(p[0].version, "0.11.4");
         assert_eq!(p[1].attr, "neovim-unwrapped");
         assert_eq!(p[1].description, "");
+        assert_eq!(
+            p[0].platforms.as_deref(),
+            Some(&["x86_64-linux".to_string(), "aarch64-darwin".to_string()][..])
+        );
+        assert_eq!(p[1].platforms, None);
+    }
+
+    #[test]
+    fn filters_by_os_or_system() {
+        assert_eq!(
+            platform_filter("linux"),
+            json!({ "wildcard": { "package_platforms": { "value": "*-linux" } } })
+        );
+        assert_eq!(
+            platform_filter("aarch64-darwin"),
+            json!({ "term": { "package_platforms": "aarch64-darwin" } })
+        );
+        let body = query_body("vim", Some("darwin"));
+        assert_eq!(body["query"]["bool"]["filter"].as_array().unwrap().len(), 2);
+        assert_eq!(
+            query_body("vim", None)["query"]["bool"]["filter"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
     }
 }

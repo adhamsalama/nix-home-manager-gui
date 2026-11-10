@@ -31,6 +31,7 @@ pub fn search_packages(query: &str) -> Result<SearchResults> {
             pname: v["pname"].as_str().unwrap_or_default().into(),
             version: v["version"].as_str().unwrap_or_default().into(),
             description: v["description"].as_str().unwrap_or_default().into(),
+            platforms: None,
         })
         .filter(|p| p.attr.to_lowercase().contains(&q) || p.description.to_lowercase().contains(&q))
         .collect();
@@ -51,12 +52,8 @@ fn current_system() -> String {
     format!("{}-{os}", std::env::consts::ARCH)
 }
 
-pub fn package_details(attr: &str) -> Result<PackageDetails> {
-    let found = search_packages(attr)?
-        .packages
-        .into_iter()
-        .find(|p| p.attr == attr);
-    let platforms: Vec<String> = [
+pub fn platforms(attr: &str) -> Vec<String> {
+    [
         "x86_64-linux",
         "aarch64-linux",
         "x86_64-darwin",
@@ -65,7 +62,15 @@ pub fn package_details(attr: &str) -> Result<PackageDetails> {
     .into_iter()
     .filter(|s| !LINUX_ONLY.contains(&attr) || s.ends_with("-linux"))
     .map(String::from)
-    .collect();
+    .collect()
+}
+
+pub fn package_details(attr: &str) -> Result<PackageDetails> {
+    let found = search_packages(attr)?
+        .packages
+        .into_iter()
+        .find(|p| p.attr == attr);
+    let platforms = platforms(attr);
     let system = current_system();
     Ok(PackageDetails {
         available: platforms.contains(&system),

@@ -16,7 +16,7 @@ Requires Rust. On Linux, also install fontconfig and xkbcommon headers (on Debia
 cargo run
 ```
 
-The UI lives in `ui/*.slint`; `src/app.rs` connects it to the backend. For layout work, `cargo run --features snapshot` with `HM_GUI_SNAPSHOT=out.png` saves a screenshot and quits; `HM_GUI_PAGE=<0-5>` and `HM_GUI_SELECT=<option>` pick what's shown.
+The UI lives in `ui/*.slint`; `src/app.rs` connects it to the backend. For layout work, `cargo run --features snapshot` with `HM_GUI_SNAPSHOT=out.png` saves a screenshot and quits; `HM_GUI_PAGE=<0-5>`, `HM_GUI_SELECT=<option>`, `HM_GUI_PACKAGE=<attr>` and `HM_GUI_QUERY=<package search>` pick what's shown.
 
 Without nix installed, the app starts in **mock mode**: fixture options, packages and generations, and simulated build output. File edits still go to a real sample file. Switch to real mode in Settings.
 
