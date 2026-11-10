@@ -31,9 +31,10 @@ slint-build = "1.18"
 [dev-dependencies]
 tempfile = "3.27.0"
 
+# No cross-crate LTO and the default codegen units: full LTO saved ~2 MB of
+# binary but tripled release build times (117 s vs 41 s to rebuild hm-gui).
 [profile.release]
-codegen-units = 1
-lto = true
+lto = false
 opt-level = 3
 panic = "abort"
 strip = true
